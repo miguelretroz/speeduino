@@ -156,6 +156,53 @@ static void test_reset_gesture_needs_key_on(void)
     TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
 }
 
+// Default: 10 minutes with the key on and the engine stopped
+static void test_key_on_wait_clears_counter(void)
+{
+    auto context = setup_attempts();
+    context.failedCrankAttempt();
+    context.failedCrankAttempt();
+
+    context.runForMinutes(9U);
+    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    context.runForMinutes(2U);
+    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1000U, crankAndMeasure(context)); // Full dose again
+}
+
+static void test_key_on_wait_restarts_after_cranking(void)
+{
+    auto context = setup_attempts();
+    context.failedCrankAttempt();
+
+    context.runForMinutes(6U);
+    context.failedCrankAttempt(); // Restarts the wait
+    context.runForMinutes(6U);
+    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    context.runForMinutes(5U);
+    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+}
+
+static void test_key_on_wait_disabled(void)
+{
+    auto context = setup_attempts();
+    context.page15.coldStartKeyOnReset = 0U;
+    context.failedCrankAttempt();
+
+    context.runForMinutes(30U);
+    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+}
+
+static void test_key_on_wait_needs_key_on(void)
+{
+    auto context = setup_attempts();
+    context.failedCrankAttempt();
+
+    context.keyOff(); // USB powered
+    context.runForMinutes(30U);
+    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+}
+
 static void test_eeprom_written_only_on_change(void)
 {
     auto context = setup_attempts();
@@ -186,6 +233,10 @@ void testColdStartAttempts(void)
         RUN_TEST_P(test_reset_gesture_released_early);
         RUN_TEST_P(test_reset_gesture_disabled);
         RUN_TEST_P(test_reset_gesture_needs_key_on);
+        RUN_TEST_P(test_key_on_wait_clears_counter);
+        RUN_TEST_P(test_key_on_wait_restarts_after_cranking);
+        RUN_TEST_P(test_key_on_wait_disabled);
+        RUN_TEST_P(test_key_on_wait_needs_key_on);
         RUN_TEST_P(test_eeprom_written_only_on_change);
     }
 }

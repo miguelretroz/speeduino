@@ -24,8 +24,39 @@ static void test_defaults_applied_to_fresh_eeprom(void)
     TEST_ASSERT_EQUAL(30U, configPage15.coldStartDosePct[2]);
     TEST_ASSERT_EQUAL(0U, configPage15.coldStartDosePct[3]);
     TEST_ASSERT_EQUAL(100U, configPage15.coldStartMinBattery);
+    TEST_ASSERT_EQUAL(80U, configPage15.coldStartCutBattery);
+    TEST_ASSERT_EQUAL(10U, configPage15.coldStartKeyOnReset);
     TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
     TEST_ASSERT_NOT_EQUAL(0xFFU, fakeStorage.marker);
+}
+
+// A board initialised by the first release: keep its settings, only initialise the new fields
+static void test_v1_upgrade_keeps_settings(void)
+{
+    resetFakeStorage();
+    initialiseColdStartConfig(configPage15);
+    configPage15.coldStartEnable = 1U;
+    configPage15.coldStartPin = 22U;
+    configPage15.coldStartDosePct[0] = 80U;
+    configPage15.coldStartCutBattery = 0xFFU; // Unused bytes in the first release
+    configPage15.coldStartKeyOnReset = 0xFFU;
+    fakeStorage.attempts = 2U;
+    fakeStorage.marker = 0xC5U; // First release marker
+
+    initialiseColdStartConfig(configPage15);
+
+    TEST_ASSERT_EQUAL(1U, configPage15.coldStartEnable);
+    TEST_ASSERT_EQUAL(22U, configPage15.coldStartPin);
+    TEST_ASSERT_EQUAL(80U, configPage15.coldStartDosePct[0]);
+    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(80U, configPage15.coldStartCutBattery);
+    TEST_ASSERT_EQUAL(10U, configPage15.coldStartKeyOnReset);
+    TEST_ASSERT_NOT_EQUAL(0xC5U, fakeStorage.marker);
+
+    // Already upgraded: nothing changes on the next boot
+    configPage15.coldStartKeyOnReset = 5U;
+    initialiseColdStartConfig(configPage15);
+    TEST_ASSERT_EQUAL(5U, configPage15.coldStartKeyOnReset);
 }
 
 static void test_defaults_not_reapplied(void)
@@ -50,6 +81,8 @@ static void test_ini_offsets(void)
     const uint8_t *pBase = (const uint8_t*)&configPage15;
 
     TEST_ASSERT_EQUAL(256U - CONFIG15_PAGE_OFFSET, sizeof(config15));
+    TEST_ASSERT_EQUAL(204U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.coldStartCutBattery - pBase);
+    TEST_ASSERT_EQUAL(205U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.coldStartKeyOnReset - pBase);
     TEST_ASSERT_EQUAL(208U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.coldStartPrimeBins - pBase);
     TEST_ASSERT_EQUAL(226U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.coldStartCrankValues - pBase);
     TEST_ASSERT_EQUAL(244U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.coldStartPulsePeriod - pBase);
@@ -93,6 +126,7 @@ void testColdStartConfig(void)
     SET_UNITY_FILENAME() {
         RUN_TEST_P(test_defaults_applied_to_fresh_eeprom);
         RUN_TEST_P(test_defaults_not_reapplied);
+        RUN_TEST_P(test_v1_upgrade_keeps_settings);
         RUN_TEST_P(test_ini_offsets);
         RUN_TEST_P(test_disabled_does_nothing);
         RUN_TEST_P(test_output_polarity);

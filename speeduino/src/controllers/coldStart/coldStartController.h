@@ -30,5 +30,6 @@ void coldStartControl(statuses &current, const config4 &page4, const config15 &p
  *
  * - Bits 0-1: phase (0 idle, 1 prime, 2 cranking, 3 after start)
  * - Bits 2-4: attempts made without the engine starting
+ * - Bit 5: output cut by low battery
  */
 uint8_t getColdStartLogStatus(void);

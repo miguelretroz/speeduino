@@ -61,6 +61,19 @@ static void test_log_locked(void)
     assert_log_status(0U, 3U); // No dose left: stays idle while cranking
 }
 
+static void test_log_low_battery(void)
+{
+    auto context = setup_coldstart();
+    context.keyOn();
+    context.run();
+    context.current.battery10 = 75U;
+    context.run();
+
+    constexpr uint8_t LOW_BATTERY_BIT = 1U << 5U;
+    TEST_ASSERT_EQUAL_HEX8(LOW_BATTERY_BIT, getColdStartLogStatus());
+    TEST_ASSERT_EQUAL_HEX8(LOW_BATTERY_BIT, getTSLogEntry(139U));
+}
+
 void testColdStartLog(void)
 {
     SET_UNITY_FILENAME() {
@@ -68,5 +81,6 @@ void testColdStartLog(void)
         RUN_TEST_P(test_log_prime);
         RUN_TEST_P(test_log_cranking_and_after_start);
         RUN_TEST_P(test_log_locked);
+        RUN_TEST_P(test_log_low_battery);
     }
 }

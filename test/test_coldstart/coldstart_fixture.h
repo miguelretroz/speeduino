@@ -50,16 +50,22 @@ struct coldstart_context_t
     }
 
     /** @brief Run the controller for a period of time, returning how long (mS) the output was on */
-    uint32_t runFor(uint32_t durationMs)
+    uint32_t runFor(uint32_t durationMs, uint32_t stepMs = TEST_STEP_MS)
     {
         uint32_t onTimeMs = 0U;
-        for (uint32_t elapsed = 0U; elapsed < durationMs; elapsed += TEST_STEP_MS)
+        for (uint32_t elapsed = 0U; elapsed < durationMs; elapsed += stepMs)
         {
             run();
-            if (coldStartState.isOutputOn) { onTimeMs += TEST_STEP_MS; }
-            nowMs += TEST_STEP_MS;
+            if (coldStartState.isOutputOn) { onTimeMs += stepMs; }
+            nowMs += stepMs;
         }
         return onTimeMs;
+    }
+
+    /** @brief Run for whole minutes, in 1S steps */
+    void runForMinutes(uint32_t minutes)
+    {
+        (void)runFor(minutes * 60000UL, 1000U);
     }
 
     bool isOutputOn(void) const { return coldStartState.isOutputOn; }

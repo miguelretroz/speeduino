@@ -924,11 +924,13 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-205
-  byte Unused15_106_205[100];
+  //Bytes 106-203
+  byte Unused15_106_203[98];
 
-  //Bytes 206-255 - Cold start auxiliary fuel system (fork specific).
-  //Allocated from the end of the page to stay clear of upstream additions.
+  //Bytes 204-255 - Cold start auxiliary fuel system (fork specific).
+  //Allocated from the end of the page to stay clear of upstream additions: new fields go *before* the existing ones.
+  byte coldStartCutBattery;     ///< Below this the output is cut (Unit: 0.1V). 0 disables the cut
+  byte coldStartKeyOnReset;     ///< Key on time, engine stopped, that clears the attempt counter (Unit: 1 minute). 0 disables it
   byte coldStartEnable : 1;
   byte coldStartInv : 1;
   byte coldStartUnused1 : 6;

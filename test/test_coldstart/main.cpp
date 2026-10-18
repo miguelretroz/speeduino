@@ -8,12 +8,14 @@ void runAllTests(void)
     extern void testColdStartCranking(void);
     extern void testColdStartAttempts(void);
     extern void testColdStartLog(void);
+    extern void testColdStartBattery(void);
 
     testColdStartConfig();
     testColdStartPrime();
     testColdStartCranking();
     testColdStartAttempts();
     testColdStartLog();
+    testColdStartBattery();
 }
 
 TEST_HARNESS(runAllTests)

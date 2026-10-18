@@ -16,8 +16,14 @@ using namespace coldStartController::details;
 
 /** @brief Battery voltage below which the key is considered off (Unit: 0.1V). Matches the USB power detection in the main loop. */
 static constexpr uint8_t KEY_OFF_BATTERY = 55U;
-/** @brief Saved to EEPROM once the cold start config fields have been initialised */
-static constexpr uint8_t CONFIG_MARKER = 0xC5U;
+/** @brief Hysteresis for the low battery cut (Unit: 0.1V) */
+static constexpr uint8_t LOW_BATTERY_HYSTERESIS = 5U;
+/**
+ * @brief Saved to EEPROM once the cold start config fields have been initialised. Acts as the version
+ * of the fork's config layout, since the upstream data version can't be used.
+ */
+static constexpr uint8_t CONFIG_MARKER_V1 = 0xC5U; // Bytes 206-255
+static constexpr uint8_t CONFIG_MARKER_V2 = 0xC6U; // Added the low battery cut and key on reset (bytes 204-205)
 
 TESTABLE_CONSTEXPR table2D_u8_u8_6 coldStartPrimeTable(&configPage15.coldStartPrimeBins, &configPage15.coldStartPrimeValues);
 TESTABLE_CONSTEXPR table2D_u8_u8_6 coldStartCrankTable(&configPage15.coldStartCrankBins, &configPage15.coldStartCrankValues);
@@ -68,6 +74,13 @@ void __attribute__((optimize("Os"))) setDefaults(config15 &page15)
   page15.coldStartRunReset = 10U;      // 10S
   page15.coldStartResetTps = 180U;     // 90%
   page15.coldStartResetTime = 30U;     // 3S
+  setV2Defaults(page15);
+}
+
+void __attribute__((optimize("Os"))) setV2Defaults(config15 &page15)
+{
+  page15.coldStartCutBattery = 80U;    // 8V
+  page15.coldStartKeyOnReset = 10U;    // 10 minutes
 }
 
 } // namespace details
@@ -76,12 +89,21 @@ void __attribute__((optimize("Os"))) setDefaults(config15 &page15)
 
 void __attribute__((optimize("Os"))) initialiseColdStartConfig(config15 &page15)
 {
-  if (loadColdStartMarker() != CONFIG_MARKER)
+  uint8_t marker = loadColdStartMarker();
+  if (marker != CONFIG_MARKER_V2)
   {
-    setDefaults(page15);
+    if (marker == CONFIG_MARKER_V1)
+    {
+      // Keep the existing settings, only initialise the new fields
+      setV2Defaults(page15);
+    }
+    else
+    {
+      setDefaults(page15);
+      saveColdStartAttempts(0U);
+    }
     savePage(boostvvtPage2);
-    saveColdStartAttempts(0U);
-    saveColdStartMarker(CONFIG_MARKER);
+    saveColdStartMarker(CONFIG_MARKER_V2);
   }
 }
 
@@ -122,6 +144,18 @@ static bool isKeyOn(const statuses &current, const config15 &page15)
   else if (current.battery10 < KEY_OFF_BATTERY) { keyOn = false; }
   else { /* Hysteresis band: keep the last state */ }
   return keyOn;
+}
+
+static bool isBatteryLow(const statuses &current, const config15 &page15)
+{
+  bool isLow = coldStartState.isBatteryLow;
+  // Key off (E.g. USB power only) isn't a low battery: the output is already off
+  if ((page15.coldStartCutBattery == 0U) || !coldStartState.isKeyOn) { isLow = false; }
+  else if (current.battery10 < page15.coldStartCutBattery) { isLow = true; }
+  // Hysteresis stops the relay chattering when the voltage hovers at the threshold
+  else if ((uint16_t)current.battery10 >= ((uint16_t)page15.coldStartCutBattery + LOW_BATTERY_HYSTERESIS)) { isLow = false; }
+  else { /* Hysteresis band: keep the last state */ }
+  return isLow;
 }
 
 static inline bool isCoolantValid(const statuses &current, const config15 &page15)
@@ -177,7 +211,7 @@ static Phase startPrime(const statuses &current, const config15 &page15, uint32_
   uint8_t dosePct = getDosePercent(page15, coldStartState.attempts);
   // 0.1S * % == mS
   uint32_t durationMs = (uint32_t)lookupCurve(coldStartPrimeTable, current) * dosePct;
-  if (isCoolantValid(current, page15) && (durationMs != 0U))
+  if (isCoolantValid(current, page15) && (durationMs != 0U) && !coldStartState.isBatteryLow)
   {
     openAttempt(dosePct);
     coldStartState.phaseStartMs = nowMs;
@@ -192,7 +226,8 @@ static Phase startCranking(const statuses &current, const config15 &page15, uint
   if (!coldStartState.isAttemptOpen)
   {
     uint8_t dosePct = getDosePercent(page15, coldStartState.attempts);
-    if (!isCoolantValid(current, page15) || (dosePct == 0U) || (getPulseOnTimeMs(current, page15) == 0U))
+    // Battery too low: don't count an attempt that can't inject. Retried every loop, so it opens once the voltage recovers.
+    if (!isCoolantValid(current, page15) || (dosePct == 0U) || (getPulseOnTimeMs(current, page15) == 0U) || coldStartState.isBatteryLow)
     {
       return Phase::Idle;
     }
@@ -267,36 +302,22 @@ static Phase nextPhase(const statuses &current, const config15 &page15, uint32_t
 
 static void updateCounterResets(const statuses &current, const config15 &page15, uint32_t nowMs)
 {
-  // The engine started: running long enough clears the counter
-  if (current.rotationStatus == EngineRotationStatus::Running)
-  {
-    if (coldStartState.lastRotation != EngineRotationStatus::Running) { coldStartState.runningSinceMs = nowMs; }
-    else if (hasIntervalElapsed(nowMs, coldStartState.runningSinceMs, (uint32_t)page15.coldStartRunReset * 1000U)) { saveAttempts(0U); }
-    else { /* Not running for long enough yet */ }
-  }
+  bool isKeyOnStopped = coldStartState.isKeyOn && (current.rotationStatus == EngineRotationStatus::Stopped);
 
-  // The reset gesture: key on, engine stopped and throttle held open
-  bool isGesture = (page15.coldStartResetTps != 0U)
-                && coldStartState.isKeyOn
-                && (current.rotationStatus == EngineRotationStatus::Stopped)
-                && (current.TPS >= page15.coldStartResetTps);
-  if (!isGesture)
-  {
-    coldStartState.isResetGestureActive = false;
-  }
-  else if (!coldStartState.isResetGestureActive)
-  {
-    coldStartState.isResetGestureActive = true;
-    coldStartState.resetGestureSinceMs = nowMs;
-  }
-  else if (hasIntervalElapsed(nowMs, coldStartState.resetGestureSinceMs, (uint32_t)page15.coldStartResetTime * 100U))
-  {
-    clearAttempts();
-  }
-  else
-  {
-    // Gesture in progress
-  }
+  // The engine started: running long enough clears the counter
+  bool isRunningDone = coldStartState.runningTimer.update(current.rotationStatus == EngineRotationStatus::Running,
+                                                          nowMs, (uint32_t)page15.coldStartRunReset * 1000U);
+  // Waiting with the key on (E.g. for a flooded engine to clear) clears the counter
+  bool isKeyOnDone = coldStartState.keyOnTimer.update((page15.coldStartKeyOnReset != 0U) && isKeyOnStopped,
+                                                      nowMs, (uint32_t)page15.coldStartKeyOnReset * 60000UL);
+  // The reset gesture: throttle held open
+  bool isGestureDone = coldStartState.resetGestureTimer.update((page15.coldStartResetTps != 0U) && isKeyOnStopped && (current.TPS >= page15.coldStartResetTps),
+                                                               nowMs, (uint32_t)page15.coldStartResetTime * 100U);
+
+  if (isKeyOnDone || isGestureDone) { clearAttempts(); }
+  // The running engine may still be in an attempt (After start), so leave that open
+  else if (isRunningDone) { saveAttempts(0U); }
+  else { /* Nothing to clear */ }
 }
 
 /** @brief Advance the pulse window and check whether the output is in the on part of it */
@@ -317,8 +338,8 @@ static bool isPulseOn(const statuses &current, const config15 &page15, uint32_t 
 
 static bool isOutputRequired(const statuses &current, const config4 &page4, const config15 &page15, uint32_t nowMs)
 {
-  // Throttle held open (flood clear): no cold start fuel in any phase
-  if (current.TPS >= page4.floodClear) { return false; }
+  // Throttle held open (flood clear) or battery too low: no cold start fuel in any phase
+  if ((current.TPS >= page4.floodClear) || coldStartState.isBatteryLow) { return false; }
 
   bool isOn = false;
   switch (coldStartState.phase)
@@ -360,6 +381,7 @@ TESTABLE_INLINE_STATIC void coldStartControlCore(statuses &current, const config
   {
     bool wasKeyOn = coldStartState.isKeyOn;
     coldStartState.isKeyOn = isKeyOn(current, page15);
+    coldStartState.isBatteryLow = isBatteryLow(current, page15);
     accumulateCrankOnTime(nowMs);
     updateCounterResets(current, page15, nowMs);
     coldStartState.phase = nextPhase(current, page15, nowMs, !wasKeyOn && coldStartState.isKeyOn);
@@ -378,7 +400,9 @@ uint8_t getColdStartLogStatus(void)
 {
   static_assert((uint8_t)Phase::AfterStart <= 0x03U, "Phase does not fit in 2 bits");
   static_assert(DOSE_ATTEMPTS <= 0x07U, "Attempts do not fit in 3 bits");
-  return (uint8_t)((uint8_t)coldStartState.phase | (uint8_t)(coldStartState.attempts << 2U));
+  return (uint8_t)((uint8_t)coldStartState.phase
+                 | (uint8_t)(coldStartState.attempts << 2U)
+                 | (uint8_t)((coldStartState.isBatteryLow ? 1U : 0U) << 5U));
 }
 
 // LCOV_EXCL_START
