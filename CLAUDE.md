@@ -130,6 +130,7 @@ O projeto está sendo refatorado aos poucos para ficar testável. Siga a direç�
   - `test_ini_offsets` (`test/test_coldstart/test_config.cpp`) confere os offsets do INI contra o struct
 
 - **Pull-up no RX da serial secundária (AVR)**: com a serial secundária no protocolo TunerStudio e o pino 15 (RX3) solto, o ruído da rede (~60 bytes/s) sequestrava a serial principal e o TunerStudio não conectava. `init.cpp` liga o pull-up interno depois do `secondarySerial.begin()`
+- **Bateria travada em 12,5 V com o motor parado** (bug do upstream desde `8562aaa7`): quando o motor para, o loop chama `initialiseCorrections()`, que grava o padrão de boot `battery10 = 125` a cada volta. `speeduino.ino` guarda e devolve a leitura medida. A partida a frio depende dela para saber se a chave está ligada e para o corte por bateria baixa
 - ⚠️ **Gravar um release antigo (ex.: SpeedyLoader 202501, dados v24) numa placa com dados v27 só rebaixa o byte de versão (endereço 0) sem converter.** Antes de voltar para este firmware, corrija o byte 0 para 27, senão as migrações rodam de novo e corrompem o acerto
 
 ## Git e PRs

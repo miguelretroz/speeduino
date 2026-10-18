@@ -223,7 +223,11 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
       currentStatus.startRevolutions = 0;
       resetMAPcycleAndEvent();
       currentStatus.rpmDOT = 0;
+      // Fork: initialiseCorrections() also loads the 12.5V boot default into battery10, which pinned the
+      // battery reading at 12.5V whenever the engine is stopped. Keep the measured value.
+      const byte battery10 = currentStatus.battery10;
       initialiseCorrections();
+      currentStatus.battery10 = battery10;
       ignitionCount = 0;
       if (configPage6.iacPWMrun == false) { disableIdle(); } //Turn off the idle PWM
       currentStatus.wueIsActive = false; //Same as above except for WUE
