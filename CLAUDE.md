@@ -129,6 +129,9 @@ O projeto está sendo refatorado aos poucos para ficar testável. Siga a direç�
   - Status no datalog: bits 6 e 7 do `status5` (`coldStartActive`, `coldStartLocked`) e o byte 139 do pacote ao vivo (bits 0-1 fase, bits 2-4 tentativas), por isso `ochBlockSize = 140` no INI. O `LOG_ENTRY_SIZE` do firmware ficou em 138 de propósito: já diverge do INI no upstream e só afeta o comando legado `A` e o programmable outputs
   - `test_ini_offsets` (`test/test_coldstart/test_config.cpp`) confere os offsets do INI contra o struct
 
+- **Pull-up no RX da serial secundária (AVR)**: com a serial secundária no protocolo TunerStudio e o pino 15 (RX3) solto, o ruído da rede (~60 bytes/s) sequestrava a serial principal e o TunerStudio não conectava. `init.cpp` liga o pull-up interno depois do `secondarySerial.begin()`
+- ⚠️ **Gravar um release antigo (ex.: SpeedyLoader 202501, dados v24) numa placa com dados v27 só rebaixa o byte de versão (endereço 0) sem converter.** Antes de voltar para este firmware, corrija o byte 0 para 27, senão as migrações rodam de novo e corrompem o acerto
+
 ## Git e PRs
 
 - Este repositório é um **fork para uso próprio**: `origin` = `miguelretroz/speeduino`, `upstream` = `speeduino/speeduino`

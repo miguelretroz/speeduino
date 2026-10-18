@@ -164,7 +164,16 @@ void initialiseAll(void)
     #endif
 
     //Must come after setPinMapping() as secondary serial can be changed on a per board basis
-    if (configPage9.enable_secondarySerial == 1) { secondarySerial.begin(115200); }
+    if (configPage9.enable_secondarySerial == 1)
+    {
+      secondarySerial.begin(115200);
+#if defined(CORE_AVR)
+      // Fork specific: an unconnected RX pin picks up mains noise (~60 stray bytes/s). With the TunerStudio
+      // protocol each stray byte hijacks the primary serial until the receive timeout, blocking USB comms.
+      // The internal pull-up holds the line idle when nothing is connected.
+      pinMode(SECONDARY_SERIAL_RX_PIN, INPUT_PULLUP);
+#endif
+    }
 
     //Perform all initialisations
     initialiseIgnitionSchedules(currentStatus, configPage2, configPage4, configPage10, configPage13, pinNumbers);

@@ -317,6 +317,22 @@ void test_initialisation_input_user_pin_does_not_override_outputpin(void)
 #endif
 }
 
+// Fork specific: an unconnected secondary serial RX pin picks up mains noise, and with the TunerStudio
+// protocol each stray byte hijacks the primary serial. The pin must be pulled up, not left floating.
+void test_initialisation_secondary_serial_rx_pullup(void)
+{
+#if defined(CORE_AVR)
+  prepareForInitialiseAll(3);
+  configPage9.enable_secondarySerial = 1;
+  pinMode(SECONDARY_SERIAL_RX_PIN, INPUT); // As after a reset: earlier tests may have left it as an output
+  initialiseAll();
+  TEST_ASSERT_EQUAL(INPUT_PULLUP, getPinMode(SECONDARY_SERIAL_RX_PIN));
+  configPage9.enable_secondarySerial = 0;
+#else
+  TEST_IGNORE_MESSAGE("AVR only");
+#endif
+}
+
 void testInitialisation()
 {
   SET_UNITY_FILENAME() {
@@ -332,5 +348,6 @@ void testInitialisation()
   RUN_TEST_P(test_initialisation_outputs_reset_control_override_board_default);
   RUN_TEST_P(test_initialisation_user_pin_override_board_default);
   RUN_TEST_P(test_initialisation_input_user_pin_does_not_override_outputpin);
+  RUN_TEST_P(test_initialisation_secondary_serial_rx_pullup);
   }
 }

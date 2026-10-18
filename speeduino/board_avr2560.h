@@ -169,6 +169,7 @@ static inline void IGN8_TIMER_DISABLE(void) { TIMSK3 &= ~(1 << OCIE3B); } //Repl
 * CAN / Second serial
 */
 #define SECONDARY_SERIAL_T HardwareSerial
+constexpr uint8_t SECONDARY_SERIAL_RX_PIN = 15U; ///< Serial3 RX
 
 class fastInputPin_t;
 using boardInputPin_t = fastInputPin_t;
