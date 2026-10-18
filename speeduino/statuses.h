@@ -251,6 +251,10 @@ struct statuses {
   bool knockRetardActive : 1; ///< Is knock retardation active (true) or not (false) 
   // cppcheck-suppress misra-c2012-6.1 ; False positive - MISRA C:2012 Rule (R 6.1) permits the use of boolean for bit fields.
   bool knockPulseDetected : 1;  ///<
+  // cppcheck-suppress misra-c2012-6.1 ; False positive - MISRA C:2012 Rule (R 6.1) permits the use of boolean for bit fields.
+  bool coldStartActive : 1; ///< Is the cold start output on (true) or not (false)
+  // cppcheck-suppress misra-c2012-6.1 ; False positive - MISRA C:2012 Rule (R 6.1) permits the use of boolean for bit fields.
+  bool coldStartLocked : 1; ///< Is cold start locked out after too many attempts (true) or not (false)
 
   // cppcheck-suppress misra-c2012-6.1 ; False positive - MISRA C:2012 Rule (R 6.1) permits the use of boolean for bit fields.
   bool aseIsActive : 1; ///< Is After Start Enrichment (ASE) active (true) or not (false) 

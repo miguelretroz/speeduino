@@ -924,7 +924,30 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-255
-  byte Unused15_106_255[150];
+  //Bytes 106-205
+  byte Unused15_106_205[100];
+
+  //Bytes 206-255 - Cold start auxiliary fuel system (fork specific).
+  //Allocated from the end of the page to stay clear of upstream additions.
+  byte coldStartEnable : 1;
+  byte coldStartInv : 1;
+  byte coldStartUnused1 : 6;
+  byte coldStartPin : 6;
+  byte coldStartUnused2 : 2;
+  byte coldStartPrimeBins[6];   ///< Coolant (+40 offset)
+  byte coldStartPrimeValues[6]; ///< Key on prime duration (Unit: 0.1S)
+  byte coldStartCrankBins[6];   ///< Coolant (+40 offset)
+  byte coldStartCrankValues[6]; ///< Pulse on time while cranking (Unit: 10mS)
+  byte coldStartAfterBins[6];   ///< Coolant (+40 offset)
+  byte coldStartAfterValues[6]; ///< Pulsing duration after the engine starts (Unit: 0.1S)
+  byte coldStartPulsePeriod;    ///< Pulse period while cranking (Unit: 10mS)
+  byte coldStartPulseMin;       ///< Minimum pulse on time (Unit: 10mS)
+  byte coldStartCrankMaxTime;   ///< Maximum total on time while cranking, per attempt (Unit: 0.1S)
+  byte coldStartMinBattery;     ///< Battery voltage that identifies key on (Unit: 0.1V)
+  byte coldStartMinValidClt;    ///< Coolant readings below this are a sensor fault (+40 offset)
+  byte coldStartDosePct[4];     ///< Dose for attempts 1 to 4 (%). Later attempts get no dose
+  byte coldStartRunReset;       ///< Running time that clears the attempt counter (Unit: 1S)
+  byte coldStartResetTps;       ///< TPS for the attempt counter reset gesture. 0 disables it (Unit: 0.5%)
+  byte coldStartResetTime;      ///< Hold time for the attempt counter reset gesture (Unit: 0.1S)
 
 } __attribute__((packed,aligned(__alignof__(uint16_t)))); //The 32 bit systems require all structs to be fully packed, aligned to their largest member type 

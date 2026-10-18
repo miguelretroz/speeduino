@@ -38,6 +38,7 @@
 #include "src/controllers/progammableIO/programmableIOControl.h"
 #include "src/controllers/tacho/tachoController.h"
 #include "src/controllers/launch/launchController.h"
+#include "src/controllers/coldStart/coldStartController.h"
 
 #if defined(CORE_AVR)
 #pragma GCC push_options
@@ -128,6 +129,7 @@ void initialiseAll(void)
     loadAllPages();
     loadAllCalibrationTables(); 
     doUpdates(); //Check if any data items need updating (Occurs with firmware updates)
+    initialiseColdStartConfig(configPage15); //Fork specific: the cold start fields have no upstream data version
 #endif
 
     //Always start with a clean slate on the bootloader capabilities level
@@ -171,6 +173,7 @@ void initialiseAll(void)
     initialiseFan(currentStatus, configPage2, configPage6, pinNumbers);
     initialiseBoost(currentStatus, configPage2, configPage6, configPage10, pinNumbers);
     initialiseAirCon(currentStatus, configPage15, pinNumbers);
+    initialiseColdStart(currentStatus, configPage15, pinNumbers);
     initialiseNitrous();
     initialiseVvtWmi(currentStatus, pinNumbers, configPage4, configPage6, configPage10);
     initialiseCorrections();
@@ -293,6 +296,9 @@ void setPinMapping(byte boardID)
   if ((configPage15.airConCompPin != 0) && (configPage15.airConCompPin < BOARD_MAX_IO_PINS) ) { pinNumbers.pinAirConComp = pinTranslate(configPage15.airConCompPin); }
   if ((configPage15.airConFanPin != 0) && (configPage15.airConFanPin < BOARD_MAX_IO_PINS) ) { pinNumbers.pinAirConFan = pinTranslate(configPage15.airConFanPin); }
   if ((configPage15.airConReqPin != 0) && (configPage15.airConReqPin < BOARD_MAX_IO_PINS) ) { pinNumbers.pinAirConRequest = pinTranslate(configPage15.airConReqPin); }
+
+  // Cold start auxiliary fuel system
+  if ((configPage15.coldStartPin != 0) && (configPage15.coldStartPin < BOARD_MAX_IO_PINS) ) { pinNumbers.pinColdStart = pinTranslate(configPage15.coldStartPin); }
     
   /* Reset control is a special case. If reset control is enabled, it needs its initial state set BEFORE its pinMode.
      If that doesn't happen and reset control is in "Serial Command" mode, the Arduino will end up in a reset loop

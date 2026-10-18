@@ -126,6 +126,16 @@ uint8_t loadEEPROMVersion(void);
 /** @copydoc loadEEPROMVersion */
 void saveEEPROMVersion(uint8_t newVersion);
 
+/** @brief Cold start attempts made without the engine starting. Survives power cycles. */
+uint8_t loadColdStartAttempts(void);
+/** @copydoc loadColdStartAttempts */
+void saveColdStartAttempts(uint8_t attempts);
+
+/** @brief Marker recording that the cold start config fields have been initialised */
+uint8_t loadColdStartMarker(void);
+/** @copydoc loadColdStartMarker */
+void saveColdStartMarker(uint8_t marker);
+
 ///@}
 
 #endif // STORAGE_H

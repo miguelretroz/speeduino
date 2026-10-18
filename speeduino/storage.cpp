@@ -95,6 +95,12 @@ constexpr uint16_t EEPROM_CONFIG8_MAP8   = 3151;
 constexpr uint16_t EEPROM_CONFIG15_MAP   = 3199;
 constexpr uint16_t EEPROM_CONFIG15_START = 3281;
 
+// Cold start (fork specific). Placed at the top of the gap between page 15 and the calibration CRCs
+constexpr uint16_t EEPROM_COLDSTART_MARKER   = 3672;
+constexpr uint16_t EEPROM_COLDSTART_ATTEMPTS = 3673;
+static_assert(EEPROM_COLDSTART_MARKER >= EEPROM_CONFIG15_START+sizeof(config15), "Cold start data overlaps page 15");
+static_assert(EEPROM_COLDSTART_ATTEMPTS < 3674U, "Cold start data overlaps the calibration CRCs"); // 3674 == EEPROM_CALIBRATION_CLT_CRC
+
 TESTABLE_INLINE_STATIC uint16_t getSensorCalibrationAddress(SensorCalibrationTable sensor, SensorCalibrationTableElement element) {
   constexpr uint16_t EEPROM_CALIBRATION_CLT_CRC = 3674;
   constexpr uint16_t EEPROM_CALIBRATION_IAT_CRC = 3678;
@@ -655,8 +661,26 @@ uint8_t loadEEPROMVersion(void)
   return getStorageAPI().read(EEPROM_DATA_VERSION); 
 }
 void saveEEPROMVersion(uint8_t newVersion)
-{ 
-  (void)update(getStorageAPI(), EEPROM_DATA_VERSION, newVersion); 
+{
+  (void)update(getStorageAPI(), EEPROM_DATA_VERSION, newVersion);
+}
+
+uint8_t loadColdStartAttempts(void)
+{
+  return getStorageAPI().read(EEPROM_COLDSTART_ATTEMPTS);
+}
+void saveColdStartAttempts(uint8_t attempts)
+{
+  (void)update(getStorageAPI(), EEPROM_COLDSTART_ATTEMPTS, attempts);
+}
+
+uint8_t loadColdStartMarker(void)
+{
+  return getStorageAPI().read(EEPROM_COLDSTART_MARKER);
+}
+void saveColdStartMarker(uint8_t marker)
+{
+  (void)update(getStorageAPI(), EEPROM_COLDSTART_MARKER, marker);
 }
 // LCOV_EXCL_STOP
 

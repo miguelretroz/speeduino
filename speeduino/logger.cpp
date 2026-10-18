@@ -101,6 +101,8 @@ static byte buildStatus5(const statuses &current)
     current.knockRetardActive,
     current.knockPulseDetected,
     current.launchStatus.clutchTrigger,
+    current.coldStartActive,
+    current.coldStartLocked,
   };
   return setStatusBits(0U, bits);
 }

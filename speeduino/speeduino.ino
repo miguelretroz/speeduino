@@ -62,6 +62,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "src/controllers/aircon/airconController.h"
 #include "src/controllers/nitrous/nitrousController.h"
 #include "src/controllers/auxChannels/auxChannelController.h"
+#include "src/controllers/coldStart/coldStartController.h"
 
 #define CRANK_RUN_HYSTER    15
 
@@ -240,6 +241,7 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
     }
 
     fuelPumpControl(currentStatus, configPage2);
+    coldStartControl(currentStatus, configPage4, configPage15);
 
     //***Perform sensor reads***
     //-----------------------------------------------------------------------------------------------------
