@@ -12,7 +12,7 @@ static void test_cranking_pulses(void)
     TEST_ASSERT_EQUAL(300U, context.runFor(300U));
     TEST_ASSERT_EQUAL(0U, context.runFor(700U));
     TEST_ASSERT_EQUAL(300U, context.runFor(1000U));
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_cranking_min_pulse(void)
@@ -43,7 +43,7 @@ static void test_cranking_warm_engine(void)
     context.keyOn();
     context.crank();
     TEST_ASSERT_EQUAL(0U, context.runFor(3000U));
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
 }
 
 static void test_cranking_max_on_time(void)
@@ -78,7 +78,7 @@ static void test_cranking_after_prime_same_attempt(void)
     (void)context.runFor(2000U);
     context.crank();
     TEST_ASSERT_EQUAL(300U, context.runFor(1000U));
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_cranking_interrupts_prime(void)
@@ -128,7 +128,7 @@ static void test_after_start_back_to_cranking(void)
     (void)context.runFor(500U);
     context.crank(); // Stumbles below the cranking RPM
     TEST_ASSERT_EQUAL(300U, context.runFor(1000U));
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts); // Same attempt
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts); // Same attempt
 }
 
 void testColdStartCranking(void)

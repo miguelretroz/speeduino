@@ -6,7 +6,6 @@
 #include "coldStartController_details.h"
 #include "../../../globals.h"
 #include "../../../storage.h"
-#include "../../../pages.h"
 #include "../../../units.h"
 #include "../../../unit_testing.h"
 #include "../../../elapsed_time.h"
@@ -18,12 +17,6 @@ using namespace coldStartController::details;
 static constexpr uint8_t KEY_OFF_BATTERY = 55U;
 /** @brief Hysteresis for the low battery cut (Unit: 0.1V) */
 static constexpr uint8_t LOW_BATTERY_HYSTERESIS = 5U;
-/**
- * @brief Saved to EEPROM once the cold start config fields have been initialised. Acts as the version
- * of the fork's config layout, since the upstream data version can't be used.
- */
-static constexpr uint8_t CONFIG_MARKER_V1 = 0xC5U; // Bytes 206-255
-static constexpr uint8_t CONFIG_MARKER_V2 = 0xC6U; // Added the low battery cut and key on reset (bytes 204-205)
 
 TESTABLE_CONSTEXPR table2D_u8_u8_6 coldStartPrimeTable(&configPage15.coldStartPrimeBins, &configPage15.coldStartPrimeValues);
 TESTABLE_CONSTEXPR table2D_u8_u8_6 coldStartCrankTable(&configPage15.coldStartCrankBins, &configPage15.coldStartCrankValues);
@@ -86,26 +79,6 @@ void __attribute__((optimize("Os"))) setV2Defaults(config15 &page15)
 } // namespace details
 
 } // namespace coldStartController
-
-void __attribute__((optimize("Os"))) initialiseColdStartConfig(config15 &page15)
-{
-  uint8_t marker = loadColdStartMarker();
-  if (marker != CONFIG_MARKER_V2)
-  {
-    if (marker == CONFIG_MARKER_V1)
-    {
-      // Keep the existing settings, only initialise the new fields
-      setV2Defaults(page15);
-    }
-    else
-    {
-      setDefaults(page15);
-      saveColdStartAttempts(0U);
-    }
-    savePage(boostvvtPage2);
-    saveColdStartMarker(CONFIG_MARKER_V2);
-  }
-}
 
 static void writeOutput(bool isOn, const config15 &page15)
 {

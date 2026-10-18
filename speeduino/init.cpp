@@ -39,6 +39,8 @@
 #include "src/controllers/tacho/tachoController.h"
 #include "src/controllers/launch/launchController.h"
 #include "src/controllers/coldStart/coldStartController.h"
+#include "src/controllers/oilTemp/oilTempController.h"
+#include "fork_updates.h"
 
 #if defined(CORE_AVR)
 #pragma GCC push_options
@@ -129,7 +131,7 @@ void initialiseAll(void)
     loadAllPages();
     loadAllCalibrationTables(); 
     doUpdates(); //Check if any data items need updating (Occurs with firmware updates)
-    initialiseColdStartConfig(configPage15); //Fork specific: the cold start fields have no upstream data version
+    doForkUpdates(configPage15); //Fork specific fields, which have their own data version
 #endif
 
     //Always start with a clean slate on the bootloader capabilities level
@@ -183,6 +185,7 @@ void initialiseAll(void)
     initialiseBoost(currentStatus, configPage2, configPage6, configPage10, pinNumbers);
     initialiseAirCon(currentStatus, configPage15, pinNumbers);
     initialiseColdStart(currentStatus, configPage15, pinNumbers);
+    initialiseOilTemp(configPage15, pinNumbers);
     initialiseNitrous();
     initialiseVvtWmi(currentStatus, pinNumbers, configPage4, configPage6, configPage10);
     initialiseCorrections();
@@ -308,6 +311,10 @@ void setPinMapping(byte boardID)
 
   // Cold start auxiliary fuel system
   if ((configPage15.coldStartPin != 0) && (configPage15.coldStartPin < BOARD_MAX_IO_PINS) ) { pinNumbers.pinColdStart = pinTranslate(configPage15.coldStartPin); }
+
+  // Oil temperature input and hot oil alert output
+  if (configPage15.oilTempEnable != 0) { pinNumbers.pinOilTemp = getOilTempInputPin(configPage15.oilTempPin); }
+  if ((configPage15.oilTempAlertPin != 0) && (configPage15.oilTempAlertPin < BOARD_MAX_IO_PINS) ) { pinNumbers.pinOilTempAlert = pinTranslate(configPage15.oilTempAlertPin); }
     
   /* Reset control is a special case. If reset control is enabled, it needs its initial state set BEFORE its pinMode.
      If that doesn't happen and reset control is in "Serial Command" mode, the Arduino will end up in a reset loop

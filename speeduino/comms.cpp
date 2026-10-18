@@ -953,6 +953,10 @@ void processSerialCommand(void)
       {
         processTemperatureCalibrationTableUpdate(calibrationLength, cmd, cltCalibrationTable.values, cltCalibrationTable.axis);
       }
+      else if(cmd == SensorCalibrationTable::OilTempSensor) // Fork specific
+      {
+        processTemperatureCalibrationTableUpdate(calibrationLength, cmd, oilTempCalibrationTable.values, oilTempCalibrationTable.axis);
+      }
       else
       {
         sendReturnCodeMsg(SERIAL_RC_RANGE_ERR);

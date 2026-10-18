@@ -67,7 +67,8 @@ bool pinIsOutput(byte pin)
   || (pin == pinNumbers.pinTachOut)
   || ((pin == pinNumbers.pinAirConComp) && (configPage15.airConEnable > 0))
   || ((pin == pinNumbers.pinAirConFan) && (configPage15.airConEnable > 0) && (configPage15.airConFanEnabled > 0))
-  || ((pin == pinNumbers.pinColdStart) && (configPage15.coldStartEnable > 0)) )
+  || ((pin == pinNumbers.pinColdStart) && (configPage15.coldStartEnable > 0))
+  || ((pin == pinNumbers.pinOilTempAlert) && (configPage15.oilTempEnable > 0) && (configPage15.oilTempAlertOutput > 0)) )
   {
     used = true;
   }
@@ -77,7 +78,7 @@ bool pinIsOutput(byte pin)
   return used;
 }
 
-#define pinIsSensor(pin)    ( ((pin) == pinNumbers.pinCLT) || ((pin) == pinNumbers.pinIAT) || ((pin) == pinNumbers.pinMAP) || ((pin) == pinNumbers.pinTPS) || ((pin) == pinNumbers.pinO2) || ((pin) == pinNumbers.pinBat) || (((pin) == pinNumbers.pinFlex) && (configPage2.flexEnabled != 0)) )
+#define pinIsSensor(pin)    ( ((pin) == pinNumbers.pinCLT) || ((pin) == pinNumbers.pinIAT) || ((pin) == pinNumbers.pinMAP) || ((pin) == pinNumbers.pinTPS) || ((pin) == pinNumbers.pinO2) || ((pin) == pinNumbers.pinBat) || (((pin) == pinNumbers.pinFlex) && (configPage2.flexEnabled != 0)) || (((pin) == pinNumbers.pinOilTemp) && (configPage15.oilTempEnable != 0)) )
 
 bool pinIsUsed(byte pin)
 {

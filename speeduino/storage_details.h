@@ -45,6 +45,14 @@ constexpr uint16_t getCalibrationElementSize(SensorCalibrationTable sensor, Sens
       return sizeof(decltype(o2CalibrationTable)::axis);
     }
   }
+  if (sensor==SensorCalibrationTable::OilTempSensor) {
+    if (element==SensorCalibrationTableElement::Values) {
+      return sizeof(decltype(oilTempCalibrationTable)::values);
+    }
+    if (element==SensorCalibrationTableElement::Bins) {
+      return sizeof(decltype(oilTempCalibrationTable)::axis);
+    }
+  }
 
   return 0; // Fail safe
 }

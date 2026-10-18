@@ -42,6 +42,7 @@ static void assert_nocalibration_overlap(const block &newBlock, uint8_t idxCurrB
     assert_nocalibration_overlap(newBlock, idxCurrBlock, SensorCalibrationTable::CoolantSensor);
     assert_nocalibration_overlap(newBlock, idxCurrBlock, SensorCalibrationTable::IntakeAirTempSensor);
     assert_nocalibration_overlap(newBlock, idxCurrBlock, SensorCalibrationTable::O2Sensor);
+    assert_nocalibration_overlap(newBlock, idxCurrBlock, SensorCalibrationTable::OilTempSensor);
 }
 
 static bool inline overlaps(const block &a, const block &b) {
@@ -221,10 +222,52 @@ static void print_eeprom_layout(void) {
     print_calib_table(SensorCalibrationTable::O2Sensor);
 }
 
+// Fork specific: the oil temperature calibration lives in the gap after page 15
+static bool blocksOverlap(const block &a, const block &b) {
+    return (a.start < (b.start + b.length)) && (b.start < (a.start + a.length));
+}
+
+static block getCalibrationBlock(SensorCalibrationTable table, SensorCalibrationTableElement element) {
+    return { getSensorCalibrationAddress(table, element), getCalibrationElementSize(table, element) };
+}
+
+static void test_oil_calibration_no_overlap(void) {
+    constexpr SensorCalibrationTableElement elements[] = { SensorCalibrationTableElement::Crc, SensorCalibrationTableElement::Bins, SensorCalibrationTableElement::Values };
+    constexpr SensorCalibrationTable upstreamTables[] = { SensorCalibrationTable::CoolantSensor, SensorCalibrationTable::IntakeAirTempSensor, SensorCalibrationTable::O2Sensor };
+
+    for (auto oilElement : elements) {
+        block oil = getCalibrationBlock(SensorCalibrationTable::OilTempSensor, oilElement);
+        TEST_ASSERT_GREATER_THAN(0U, oil.length);
+
+        // Against every page entity
+        for (uint8_t page = MIN_PAGE_NUM; page < MAX_PAGE_NUM; ++page) {
+            for (page_iterator_t iter = page_begin(page); iter.entity.type!=EntityType::End; iter = advance(iter)) {
+                if (iter.entity.type!=EntityType::NoEntity) {
+                    block entity = { getEntityStartAddress(iter), iter.entity.size };
+                    TEST_ASSERT_FALSE_MESSAGE(blocksOverlap(oil, entity), getEntityName(iter));
+                }
+            }
+        }
+        // Against the other calibration tables
+        for (auto table : upstreamTables) {
+            for (auto element : elements) {
+                TEST_ASSERT_FALSE(blocksOverlap(oil, getCalibrationBlock(table, element)));
+            }
+        }
+        // Against the other oil elements
+        for (auto other : elements) {
+            if (other!=oilElement) {
+                TEST_ASSERT_FALSE(blocksOverlap(oil, getCalibrationBlock(SensorCalibrationTable::OilTempSensor, other)));
+            }
+        }
+    }
+}
+
 void test_layout(void) {
-    SET_UNITY_FILENAME() {     
+    SET_UNITY_FILENAME() {
         RUN_TEST_P(test_getEntityStartAddress_invalid_entity);
         RUN_TEST_P(test_no_entity_overlap);
+        RUN_TEST_P(test_oil_calibration_no_overlap);
         RUN_TEST_P(print_eeprom_layout);
     }
 }

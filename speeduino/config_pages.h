@@ -924,11 +924,26 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-203
-  byte Unused15_106_203[98];
+  //Bytes 106-197
+  byte Unused15_106_197[92];
 
-  //Bytes 204-255 - Cold start auxiliary fuel system (fork specific).
+  //Bytes 198-255 - Fork specific features.
   //Allocated from the end of the page to stay clear of upstream additions: new fields go *before* the existing ones.
+
+  //Bytes 198-203 - Oil temperature. The sensor calibration is stored with the other temperature calibrations.
+  byte oilTempEnable : 1;
+  byte oilTempAlertOutput : 1;  ///< Drive an output (light/buzzer) when the oil is hot
+  byte oilTempAlertInv : 1;
+  byte oilTempUnused1 : 5;
+  byte oilTempPin : 5;          ///< Analog input index (0 = A0)
+  byte oilTempUnused2 : 3;
+  byte oilTempAlertPin : 6;
+  byte oilTempUnused3 : 2;
+  byte oilTempAlertOn;          ///< Hot oil alert temperature (+40 offset)
+  byte oilTempAlertHyst;        ///< The alert clears this far below the alert temperature (Unit: 1C)
+  byte oilTempFilter;           ///< ADC low pass filter (0-240)
+
+  //Bytes 204-255 - Cold start auxiliary fuel system
   byte coldStartCutBattery;     ///< Below this the output is cut (Unit: 0.1V). 0 disables the cut
   byte coldStartKeyOnReset;     ///< Key on time, engine stopped, that clears the attempt counter (Unit: 1 minute). 0 disables it
   byte coldStartEnable : 1;

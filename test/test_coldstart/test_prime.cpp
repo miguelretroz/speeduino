@@ -14,7 +14,7 @@ static void test_prime_off_by_default(void)
 
     context.keyOn();
     TEST_ASSERT_EQUAL(0U, context.runFor(5000U));
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
 }
 
 static void test_usb_power_never_primes(void)
@@ -23,7 +23,7 @@ static void test_usb_power_never_primes(void)
 
     context.current.battery10 = 50U; // USB only: below 5.5V
     TEST_ASSERT_EQUAL(0U, context.runFor(5000U));
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
 }
 
 static void test_usb_power_never_primes_low_threshold(void)
@@ -43,7 +43,7 @@ static void test_prime_on_key_on(void)
     context.run();
     TEST_ASSERT_TRUE(context.isOutputOn());
     TEST_ASSERT_TRUE(context.current.coldStartActive);
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts); // Counted before injecting
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts); // Counted before injecting
 
     TEST_ASSERT_EQUAL(1600U, context.runFor(5000U));
     TEST_ASSERT_FALSE(context.isOutputOn());
@@ -57,7 +57,7 @@ static void test_prime_once_per_key_on(void)
     context.keyOn();
     (void)context.runFor(5000U);
     TEST_ASSERT_EQUAL(0U, context.runFor(5000U));
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_prime_again_after_key_cycle(void)
@@ -71,7 +71,7 @@ static void test_prime_again_after_key_cycle(void)
     context.keyOn();
 
     TEST_ASSERT_EQUAL(960U, context.runFor(5000U)); // 2nd attempt: 60% of 1.6S
-    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(2U, fakeForkStorage.attempts);
 }
 
 static void test_prime_battery_dip_does_not_rearm(void)
@@ -85,7 +85,7 @@ static void test_prime_battery_dip_does_not_rearm(void)
     context.keyOn();
 
     TEST_ASSERT_EQUAL(0U, context.runFor(5000U));
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_prime_key_off_stops_output(void)
@@ -120,7 +120,7 @@ static void test_prime_warm_engine(void)
     context.current.coolant = 45;
     context.keyOn();
     TEST_ASSERT_EQUAL(0U, context.runFor(5000U));
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
 }
 
 static void test_prime_coolant_sensor_fault(void)
@@ -130,7 +130,7 @@ static void test_prime_coolant_sensor_fault(void)
     context.current.coolant = -40; // Disconnected sensor
     context.keyOn();
     TEST_ASSERT_EQUAL(0U, context.runFor(5000U));
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
 }
 
 static void test_prime_throttle_held_open(void)

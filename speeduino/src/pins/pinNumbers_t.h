@@ -109,4 +109,6 @@ struct pinNumbers_t
   uint8_t pinAirConFan = NOT_A_PIN;    // Stand-alone air conditioning fan output
   uint8_t pinAirConRequest = NOT_A_PIN; // Air conditioning request input
   uint8_t pinColdStart = NOT_A_PIN;     // Cold start auxiliary fuel system output (pump + valve)
+  uint8_t pinOilTemp = NOT_A_PIN;       // Oil temperature sensor input (analog)
+  uint8_t pinOilTempAlert = NOT_A_PIN;  // Hot oil alert output (light/buzzer)
 };

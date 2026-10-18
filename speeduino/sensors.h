@@ -97,6 +97,7 @@ uint32_t getMAPDeltaTime(void);
 
 extern table2D_u16_u8_32 cltCalibrationTable;
 extern table2D_u16_u8_32 iatCalibrationTable;
-extern table2D_u16_u8_32 o2CalibrationTable; 
+extern table2D_u16_u8_32 o2CalibrationTable;
+extern table2D_u16_u8_32 oilTempCalibrationTable; ///< Fork specific
 
 #endif // SENSORS_H

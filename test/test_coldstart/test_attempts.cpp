@@ -27,7 +27,7 @@ static void test_dose_drops_each_attempt(void)
     TEST_ASSERT_EQUAL(1000U, crankAndMeasure(context));
     TEST_ASSERT_EQUAL(600U, crankAndMeasure(context));
     TEST_ASSERT_EQUAL(300U, crankAndMeasure(context));
-    TEST_ASSERT_EQUAL(3U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(3U, fakeForkStorage.attempts);
 }
 
 static void test_locked_after_last_dose(void)
@@ -42,7 +42,7 @@ static void test_locked_after_last_dose(void)
 
     TEST_ASSERT_EQUAL(0U, crankAndMeasure(context));
     TEST_ASSERT_EQUAL(0U, crankAndMeasure(context));
-    TEST_ASSERT_EQUAL(3U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(3U, fakeForkStorage.attempts);
 }
 
 static void test_attempts_survive_power_cycle(void)
@@ -57,13 +57,13 @@ static void test_attempts_survive_power_cycle(void)
     context.keyOn();
 
     TEST_ASSERT_EQUAL(300U, crankAndMeasure(context)); // 3rd attempt
-    TEST_ASSERT_EQUAL(3U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(3U, fakeForkStorage.attempts);
 }
 
 static void test_corrupt_count_is_locked(void)
 {
     auto context = setup_attempts();
-    fakeStorage.attempts = 200U;
+    fakeForkStorage.attempts = 200U;
     context.initialise();
 
     context.run();
@@ -81,9 +81,9 @@ static void test_running_clears_counter(void)
     (void)context.runFor(1000U);
     context.engineRunning();
     (void)context.runFor(9000U);
-    TEST_ASSERT_EQUAL(3U, fakeStorage.attempts); // Not running for long enough yet
+    TEST_ASSERT_EQUAL(3U, fakeForkStorage.attempts); // Not running for long enough yet
     (void)context.runFor(1100U);
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
     TEST_ASSERT_FALSE(context.current.coldStartLocked);
 }
 
@@ -99,7 +99,7 @@ static void test_short_run_keeps_counter(void)
     context.engineStopped(); // Stalled
     (void)context.runFor(100U);
 
-    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(2U, fakeForkStorage.attempts);
     TEST_ASSERT_EQUAL(300U, crankAndMeasure(context)); // 3rd attempt
 }
 
@@ -112,9 +112,9 @@ static void test_reset_gesture(void)
 
     context.current.TPS = 180U; // 90%
     (void)context.runFor(2900U);
-    TEST_ASSERT_EQUAL(3U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(3U, fakeForkStorage.attempts);
     (void)context.runFor(200U);
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
 
     context.current.TPS = 0U;
     TEST_ASSERT_EQUAL(1000U, crankAndMeasure(context)); // Full dose again
@@ -132,7 +132,7 @@ static void test_reset_gesture_released_early(void)
     context.current.TPS = 180U;
     (void)context.runFor(2000U);
 
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_reset_gesture_disabled(void)
@@ -142,7 +142,7 @@ static void test_reset_gesture_disabled(void)
     context.failedCrankAttempt();
 
     (void)context.runFor(5000U); // TPS is 0, which would otherwise satisfy a 0 threshold
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_reset_gesture_needs_key_on(void)
@@ -153,7 +153,7 @@ static void test_reset_gesture_needs_key_on(void)
     context.keyOff(); // USB powered
     context.current.TPS = 180U;
     (void)context.runFor(5000U);
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 // Default: 10 minutes with the key on and the engine stopped
@@ -164,9 +164,9 @@ static void test_key_on_wait_clears_counter(void)
     context.failedCrankAttempt();
 
     context.runForMinutes(9U);
-    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(2U, fakeForkStorage.attempts);
     context.runForMinutes(2U);
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
     TEST_ASSERT_EQUAL(1000U, crankAndMeasure(context)); // Full dose again
 }
 
@@ -178,9 +178,9 @@ static void test_key_on_wait_restarts_after_cranking(void)
     context.runForMinutes(6U);
     context.failedCrankAttempt(); // Restarts the wait
     context.runForMinutes(6U);
-    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(2U, fakeForkStorage.attempts);
     context.runForMinutes(5U);
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
 }
 
 static void test_key_on_wait_disabled(void)
@@ -190,7 +190,7 @@ static void test_key_on_wait_disabled(void)
     context.failedCrankAttempt();
 
     context.runForMinutes(30U);
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_key_on_wait_needs_key_on(void)
@@ -200,7 +200,7 @@ static void test_key_on_wait_needs_key_on(void)
 
     context.keyOff(); // USB powered
     context.runForMinutes(30U);
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_eeprom_written_only_on_change(void)
@@ -211,13 +211,13 @@ static void test_eeprom_written_only_on_change(void)
     context.failedCrankAttempt();
     context.failedCrankAttempt();
     context.failedCrankAttempt(); // Locked: not counted
-    TEST_ASSERT_EQUAL(3U, fakeStorage.attemptWrites);
+    TEST_ASSERT_EQUAL(3U, fakeForkStorage.attemptWrites);
 
     context.crank();
     (void)context.runFor(1000U);
     context.engineRunning();
     (void)context.runFor(30000U);
-    TEST_ASSERT_EQUAL(4U, fakeStorage.attemptWrites); // Cleared once
+    TEST_ASSERT_EQUAL(4U, fakeForkStorage.attemptWrites); // Cleared once
 }
 
 void testColdStartAttempts(void)

@@ -96,6 +96,8 @@ enum class SensorCalibrationTable : uint8_t {
     IntakeAirTempSensor = 1U,
     /** @brief The Oxygen (O2) sensor calibration curve */
     O2Sensor = 2U,
+    /** @brief Oil temperature sensor calibration curve (fork specific) */
+    OilTempSensor = 3U,
 };
 
 /** @brief Store one sensor curve in durable storage */
@@ -131,10 +133,10 @@ uint8_t loadColdStartAttempts(void);
 /** @copydoc loadColdStartAttempts */
 void saveColdStartAttempts(uint8_t attempts);
 
-/** @brief Marker recording that the cold start config fields have been initialised */
-uint8_t loadColdStartMarker(void);
-/** @copydoc loadColdStartMarker */
-void saveColdStartMarker(uint8_t marker);
+/** @brief Version of the fork specific config. The upstream data version can't be used for it. */
+uint8_t loadForkConfigVersion(void);
+/** @copydoc loadForkConfigVersion */
+void saveForkConfigVersion(uint8_t version);
 
 ///@}
 

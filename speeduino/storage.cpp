@@ -95,11 +95,16 @@ constexpr uint16_t EEPROM_CONFIG8_MAP8   = 3151;
 constexpr uint16_t EEPROM_CONFIG15_MAP   = 3199;
 constexpr uint16_t EEPROM_CONFIG15_START = 3281;
 
-// Cold start (fork specific). Placed at the top of the gap between page 15 and the calibration CRCs
-constexpr uint16_t EEPROM_COLDSTART_MARKER   = 3672;
-constexpr uint16_t EEPROM_COLDSTART_ATTEMPTS = 3673;
-static_assert(EEPROM_COLDSTART_MARKER >= EEPROM_CONFIG15_START+sizeof(config15), "Cold start data overlaps page 15");
-static_assert(EEPROM_COLDSTART_ATTEMPTS < 3674U, "Cold start data overlaps the calibration CRCs"); // 3674 == EEPROM_CALIBRATION_CLT_CRC
+// Fork specific data, in the gap between page 15 and the calibration CRCs. Allocated from the top down.
+constexpr uint16_t EEPROM_FORK_CONFIG_VERSION = 3672;
+constexpr uint16_t EEPROM_COLDSTART_ATTEMPTS  = 3673;
+// 3668-3671 reserved for the DS3231 cold start counter reset (see docs/cold-start-ds3231-plan.md on its branch)
+constexpr uint16_t EEPROM_CALIBRATION_OIL_CRC    = 3564;
+constexpr uint16_t EEPROM_CALIBRATION_OIL_BINS   = EEPROM_CALIBRATION_OIL_CRC+sizeof(uint32_t);
+constexpr uint16_t EEPROM_CALIBRATION_OIL_VALUES = EEPROM_CALIBRATION_OIL_BINS+getCalibrationElementSize(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Bins);
+static_assert(EEPROM_CALIBRATION_OIL_CRC >= EEPROM_CONFIG15_START+sizeof(config15), "Oil calibration overlaps page 15");
+static_assert(EEPROM_CALIBRATION_OIL_VALUES+getCalibrationElementSize(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Values) <= 3668U, "Oil calibration overlaps the reserved fork bytes");
+static_assert(EEPROM_COLDSTART_ATTEMPTS < 3674U, "Fork data overlaps the calibration CRCs"); // 3674 == EEPROM_CALIBRATION_CLT_CRC
 
 TESTABLE_INLINE_STATIC uint16_t getSensorCalibrationAddress(SensorCalibrationTable sensor, SensorCalibrationTableElement element) {
   constexpr uint16_t EEPROM_CALIBRATION_CLT_CRC = 3674;
@@ -140,6 +145,17 @@ TESTABLE_INLINE_STATIC uint16_t getSensorCalibrationAddress(SensorCalibrationTab
     }
     if (element==SensorCalibrationTableElement::Bins) {
       return EEPROM_CALIBRATION_O2_BINS;
+    }
+  }
+  if (sensor==SensorCalibrationTable::OilTempSensor) {
+    if (element==SensorCalibrationTableElement::Crc) {
+      return EEPROM_CALIBRATION_OIL_CRC;
+    }
+    if (element==SensorCalibrationTableElement::Values) {
+      return EEPROM_CALIBRATION_OIL_VALUES;
+    }
+    if (element==SensorCalibrationTableElement::Bins) {
+      return EEPROM_CALIBRATION_OIL_BINS;
     }
   }
 
@@ -587,6 +603,9 @@ void loadAllCalibrationTables(void)
 
   (void)loadObject(getStorageAPI(), getSensorCalibrationAddress(SensorCalibrationTable::CoolantSensor, SensorCalibrationTableElement::Bins), cltCalibrationTable.axis);
   (void)loadObject(getStorageAPI(), getSensorCalibrationAddress(SensorCalibrationTable::CoolantSensor, SensorCalibrationTableElement::Values), cltCalibrationTable.values);
+
+  (void)loadObject(getStorageAPI(), getSensorCalibrationAddress(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Bins), oilTempCalibrationTable.axis);
+  (void)loadObject(getStorageAPI(), getSensorCalibrationAddress(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Values), oilTempCalibrationTable.values);
 }
 
 /** Write calibration tables to EEPROM.
@@ -601,6 +620,9 @@ void saveAllCalibrationTables(void)
   saveCalibrationTable(SensorCalibrationTable::O2Sensor);
   saveCalibrationTable(SensorCalibrationTable::IntakeAirTempSensor);
   saveCalibrationTable(SensorCalibrationTable::CoolantSensor);
+  // The fork's oil temperature table is deliberately not saved here: this is only called by the
+  // upstream data migrations, which don't touch it. It is saved by TunerStudio's calibration
+  // command and by the fork updates.
 }
 
 void saveCalibrationTable(SensorCalibrationTable sensor)
@@ -619,6 +641,11 @@ void saveCalibrationTable(SensorCalibrationTable sensor)
   {
     updateObject(getStorageAPI(), cltCalibrationTable.axis, getSensorCalibrationAddress(SensorCalibrationTable::CoolantSensor, SensorCalibrationTableElement::Bins));
     updateObject(getStorageAPI(), cltCalibrationTable.values, getSensorCalibrationAddress(SensorCalibrationTable::CoolantSensor, SensorCalibrationTableElement::Values));
+  }
+  else if(sensor == SensorCalibrationTable::OilTempSensor)
+  {
+    updateObject(getStorageAPI(), oilTempCalibrationTable.axis, getSensorCalibrationAddress(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Bins));
+    updateObject(getStorageAPI(), oilTempCalibrationTable.values, getSensorCalibrationAddress(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Values));
   } else {
     // Unknown sensor identifier - do nothing but keep MISRA checker happy
   }
@@ -674,13 +701,13 @@ void saveColdStartAttempts(uint8_t attempts)
   (void)update(getStorageAPI(), EEPROM_COLDSTART_ATTEMPTS, attempts);
 }
 
-uint8_t loadColdStartMarker(void)
+uint8_t loadForkConfigVersion(void)
 {
-  return getStorageAPI().read(EEPROM_COLDSTART_MARKER);
+  return getStorageAPI().read(EEPROM_FORK_CONFIG_VERSION);
 }
-void saveColdStartMarker(uint8_t marker)
+void saveForkConfigVersion(uint8_t version)
 {
-  (void)update(getStorageAPI(), EEPROM_COLDSTART_MARKER, marker);
+  (void)update(getStorageAPI(), EEPROM_FORK_CONFIG_VERSION, version);
 }
 // LCOV_EXCL_STOP
 

@@ -3,6 +3,7 @@
 #include "src/controllers/coldStart/coldStartController.h"
 #include "src/controllers/coldStart/coldStartController_details.h"
 #include "globals.h"
+#include "../fake_fork_storage.h"
 
 using namespace coldStartController::details;
 
@@ -16,18 +17,6 @@ constexpr uint8_t TEST_COLDSTART_PIN = 22U;
 /** @brief Battery levels (Unit: 0.1V) */
 constexpr uint8_t BATTERY_KEY_ON = 125U;
 constexpr uint8_t BATTERY_USB_ONLY = 0U;
-
-/** @brief Fake EEPROM: only the 2 cold start bytes are stored, everything else reads as erased */
-struct fake_coldstart_storage_t
-{
-    uint8_t marker = 0xFFU;
-    uint8_t attempts = 0xFFU;
-    uint16_t attemptWrites = 0U;
-};
-extern fake_coldstart_storage_t fakeStorage;
-
-/** @brief Install the fake EEPROM, with both cold start bytes erased */
-void resetFakeStorage(void);
 
 struct coldstart_context_t
 {

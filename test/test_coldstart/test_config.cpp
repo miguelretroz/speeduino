@@ -1,17 +1,18 @@
 #include "../test_utils.h"
 #include "coldstart_fixture.h"
 #include "units.h"
+#include "fork_updates.h"
 
 static void test_defaults_applied_to_fresh_eeprom(void)
 {
-    resetFakeStorage();
+    resetFakeForkStorage();
     // Simulate never initialised EEPROM content
     configPage15.coldStartEnable = 1U;
     configPage15.coldStartPin = 63U;
     fill_curve(configPage15.coldStartPrimeValues, 0xFFU);
     configPage15.coldStartDosePct[3] = 0xFFU;
 
-    initialiseColdStartConfig(configPage15);
+    doForkUpdates(configPage15);
 
     TEST_ASSERT_EQUAL(0U, configPage15.coldStartEnable);
     TEST_ASSERT_EQUAL(0U, configPage15.coldStartPin);
@@ -26,52 +27,52 @@ static void test_defaults_applied_to_fresh_eeprom(void)
     TEST_ASSERT_EQUAL(100U, configPage15.coldStartMinBattery);
     TEST_ASSERT_EQUAL(80U, configPage15.coldStartCutBattery);
     TEST_ASSERT_EQUAL(10U, configPage15.coldStartKeyOnReset);
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
-    TEST_ASSERT_NOT_EQUAL(0xFFU, fakeStorage.marker);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_V3, fakeForkStorage.version);
 }
 
 // A board initialised by the first release: keep its settings, only initialise the new fields
 static void test_v1_upgrade_keeps_settings(void)
 {
-    resetFakeStorage();
-    initialiseColdStartConfig(configPage15);
+    resetFakeForkStorage();
+    doForkUpdates(configPage15);
     configPage15.coldStartEnable = 1U;
     configPage15.coldStartPin = 22U;
     configPage15.coldStartDosePct[0] = 80U;
     configPage15.coldStartCutBattery = 0xFFU; // Unused bytes in the first release
     configPage15.coldStartKeyOnReset = 0xFFU;
-    fakeStorage.attempts = 2U;
-    fakeStorage.marker = 0xC5U; // First release marker
+    fakeForkStorage.attempts = 2U;
+    fakeForkStorage.version = FORK_CONFIG_V1;
 
-    initialiseColdStartConfig(configPage15);
+    doForkUpdates(configPage15);
 
     TEST_ASSERT_EQUAL(1U, configPage15.coldStartEnable);
     TEST_ASSERT_EQUAL(22U, configPage15.coldStartPin);
     TEST_ASSERT_EQUAL(80U, configPage15.coldStartDosePct[0]);
-    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(2U, fakeForkStorage.attempts);
     TEST_ASSERT_EQUAL(80U, configPage15.coldStartCutBattery);
     TEST_ASSERT_EQUAL(10U, configPage15.coldStartKeyOnReset);
-    TEST_ASSERT_NOT_EQUAL(0xC5U, fakeStorage.marker);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_V3, fakeForkStorage.version);
 
     // Already upgraded: nothing changes on the next boot
     configPage15.coldStartKeyOnReset = 5U;
-    initialiseColdStartConfig(configPage15);
+    doForkUpdates(configPage15);
     TEST_ASSERT_EQUAL(5U, configPage15.coldStartKeyOnReset);
 }
 
 static void test_defaults_not_reapplied(void)
 {
-    resetFakeStorage();
-    initialiseColdStartConfig(configPage15);
+    resetFakeForkStorage();
+    doForkUpdates(configPage15);
 
     configPage15.coldStartEnable = 1U;
     configPage15.coldStartDosePct[0] = 80U;
-    fakeStorage.attempts = 2U;
-    initialiseColdStartConfig(configPage15);
+    fakeForkStorage.attempts = 2U;
+    doForkUpdates(configPage15);
 
     TEST_ASSERT_EQUAL(1U, configPage15.coldStartEnable);
     TEST_ASSERT_EQUAL(80U, configPage15.coldStartDosePct[0]);
-    TEST_ASSERT_EQUAL(2U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(2U, fakeForkStorage.attempts);
 }
 
 // The INI file addresses these fields by page offset. Page 15 starts with the 80 byte boost duty table.
@@ -81,6 +82,8 @@ static void test_ini_offsets(void)
     const uint8_t *pBase = (const uint8_t*)&configPage15;
 
     TEST_ASSERT_EQUAL(256U - CONFIG15_PAGE_OFFSET, sizeof(config15));
+    TEST_ASSERT_EQUAL(201U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.oilTempAlertOn - pBase);
+    TEST_ASSERT_EQUAL(203U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.oilTempFilter - pBase);
     TEST_ASSERT_EQUAL(204U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.coldStartCutBattery - pBase);
     TEST_ASSERT_EQUAL(205U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.coldStartKeyOnReset - pBase);
     TEST_ASSERT_EQUAL(208U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.coldStartPrimeBins - pBase);
@@ -102,7 +105,7 @@ static void test_disabled_does_nothing(void)
     context.crank();
     TEST_ASSERT_EQUAL(0U, context.runFor(3000U));
     TEST_ASSERT_FALSE(coldStartState.pin.isValid());
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attemptWrites);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attemptWrites);
 }
 
 static void test_output_polarity(void)

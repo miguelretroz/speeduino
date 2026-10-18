@@ -18,9 +18,6 @@
 #include "config_pages.h"
 #include "src/pins/pinNumbers_t.h"
 
-/** @brief Set the cold start fields of page 15 to safe defaults (disabled) if they have never been initialised */
-void initialiseColdStartConfig(config15 &page15);
-
 void initialiseColdStart(statuses &current, const config15 &page15, const pinNumbers_t &pins);
 
 void coldStartControl(statuses &current, const config4 &page4, const config15 &page15);

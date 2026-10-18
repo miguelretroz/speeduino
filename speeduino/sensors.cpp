@@ -28,6 +28,7 @@ A full copy of the license may be found in the projects root directory
 #include "decoders.h"
 #include "src/pins/boardInputPin.h"
 #include "src/pins/pinMapping.h"
+#include "src/controllers/oilTemp/oilTempController.h"
 
 uint8_t statusSensors = 0;
 
@@ -48,7 +49,10 @@ static uint8_t iatCalibration_values[32];
 table2D_u16_u8_32 iatCalibrationTable(&iatCalibration_bins, &iatCalibration_values);
 static uint16_t o2Calibration_bins[32];
 static uint8_t o2Calibration_values[32];
-table2D_u16_u8_32 o2CalibrationTable(&o2Calibration_bins, &o2Calibration_values); 
+table2D_u16_u8_32 o2CalibrationTable(&o2Calibration_bins, &o2Calibration_values);
+static uint16_t oilTempCalibration_bins[32];
+static uint8_t oilTempCalibration_values[32];
+table2D_u16_u8_32 oilTempCalibrationTable(&oilTempCalibration_bins, &oilTempCalibration_values);
 
 /**
  * @brief A specialist function to map a value in the range [0, 1023] (I.e. 10-bit) to a different range.
@@ -906,6 +910,15 @@ static inline void updateOilPressure(void)
   currentStatus.oilPressure = getOilPressure();
 }
 
+// Fork specific
+static inline void updateOilTemp(void)
+{
+  if (pinNumbers.pinOilTemp != NOT_A_PIN)
+  {
+    oilTempControl(configPage15, readAnalogSensor(pinNumbers.pinOilTemp));
+  }
+}
+
 BEGIN_LTO_ALWAYS_INLINE(void) readPolledSensors(byte loopTimer)
 {
   static constexpr 
@@ -927,6 +940,7 @@ BEGIN_LTO_ALWAYS_INLINE(void) readPolledSensors(byte loopTimer)
     {BIT_TIMER_10HZ, readGear},
     {BIT_TIMER_4HZ, updateFuelPressure},
     {BIT_TIMER_4HZ, updateOilPressure},
+    {BIT_TIMER_4HZ, updateOilTemp},
   };
   
   auto readSensor = [loopTimer](uint8_t i) __attribute__((always_inline)) {

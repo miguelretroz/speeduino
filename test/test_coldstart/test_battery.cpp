@@ -31,11 +31,11 @@ static void test_low_battery_no_attempt_counted(void)
     context.current.battery10 = 75U; // Sags as soon as the starter engages
     context.crank();
     TEST_ASSERT_EQUAL(0U, context.runFor(2000U));
-    TEST_ASSERT_EQUAL(0U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
 
     context.current.battery10 = 90U; // Recovers while still cranking
     TEST_ASSERT_EQUAL(300U, context.runFor(1000U));
-    TEST_ASSERT_EQUAL(1U, fakeStorage.attempts);
+    TEST_ASSERT_EQUAL(1U, fakeForkStorage.attempts);
 }
 
 static void test_low_battery_cuts_prime(void)

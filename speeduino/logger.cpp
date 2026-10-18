@@ -12,6 +12,7 @@
 #include "scheduler_fuel_controller.h"
 #include "src/controllers/progammableIO/programmableIOControl.h"
 #include "src/controllers/coldStart/coldStartController.h"
+#include "src/controllers/oilTemp/oilTempController.h"
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
 {
@@ -365,6 +366,8 @@ byte getTSLogEntry(uint16_t byteNum)
 #endif
     case 138: statusValue = currentStatus.systemTemp; break;
     case 139: statusValue = getColdStartLogStatus(); break; // Fork specific
+    case 140: statusValue = getOilTempLogValue(); break; // Fork specific
+    case 141: statusValue = getOilTempLogStatus(); break; // Fork specific
     default: statusValue = 0; // MISRA check
   }
 
