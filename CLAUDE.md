@@ -126,7 +126,7 @@ O projeto está sendo refatorado aos poucos para ficar testável. Siga a direç�
   - Config no fim da página 15 (bytes 206–255 do INI, `Unused15_106_205` foi encolhido). Campos novos do fork vão do fim para o começo da área livre, para não colidir com o que o upstream adicionar
   - EEPROM 3672 (marcador de inicialização) e 3673 (contador de tentativas), entre o fim da página 15 e os CRCs de calibração
   - Os campos do fork **não** usam `CURRENT_DATA_VERSION` (isso conflitaria com as migrações do upstream). Os padrões são aplicados por `initialiseColdStartConfig()` quando o marcador não existe
-  - Status no datalog: bits 6 e 7 do `status5` (`coldStartActive`, `coldStartLocked`)
+  - Status no datalog: bits 6 e 7 do `status5` (`coldStartActive`, `coldStartLocked`) e o byte 139 do pacote ao vivo (bits 0-1 fase, bits 2-4 tentativas), por isso `ochBlockSize = 140` no INI. O `LOG_ENTRY_SIZE` do firmware ficou em 138 de propósito: já diverge do INI no upstream e só afeta o comando legado `A` e o programmable outputs
   - `test_ini_offsets` (`test/test_coldstart/test_config.cpp`) confere os offsets do INI contra o struct
 
 ## Git e PRs

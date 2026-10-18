@@ -11,6 +11,7 @@
 #include "resetControl.h"
 #include "scheduler_fuel_controller.h"
 #include "src/controllers/progammableIO/programmableIOControl.h"
+#include "src/controllers/coldStart/coldStartController.h"
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
 {
@@ -363,6 +364,7 @@ byte getTSLogEntry(uint16_t byteNum)
     case 137: statusValue = highByte(fuelSchedule8.pw); break;
 #endif
     case 138: statusValue = currentStatus.systemTemp; break;
+    case 139: statusValue = getColdStartLogStatus(); break; // Fork specific
     default: statusValue = 0; // MISRA check
   }
 

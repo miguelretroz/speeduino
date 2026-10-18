@@ -24,3 +24,11 @@ void initialiseColdStartConfig(config15 &page15);
 void initialiseColdStart(statuses &current, const config15 &page15, const pinNumbers_t &pins);
 
 void coldStartControl(statuses &current, const config4 &page4, const config15 &page15);
+
+/**
+ * @brief Cold start status byte for the live data/log
+ *
+ * - Bits 0-1: phase (0 idle, 1 prime, 2 cranking, 3 after start)
+ * - Bits 2-4: attempts made without the engine starting
+ */
+uint8_t getColdStartLogStatus(void);

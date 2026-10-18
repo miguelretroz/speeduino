@@ -374,6 +374,13 @@ TESTABLE_INLINE_STATIC void coldStartControlCore(statuses &current, const config
   }
 }
 
+uint8_t getColdStartLogStatus(void)
+{
+  static_assert((uint8_t)Phase::AfterStart <= 0x03U, "Phase does not fit in 2 bits");
+  static_assert(DOSE_ATTEMPTS <= 0x07U, "Attempts do not fit in 3 bits");
+  return (uint8_t)((uint8_t)coldStartState.phase | (uint8_t)(coldStartState.attempts << 2U));
+}
+
 // LCOV_EXCL_START
 void coldStartControl(statuses &current, const config4 &page4, const config15 &page15)
 {
