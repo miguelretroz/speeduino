@@ -72,7 +72,8 @@ static void processSecondaryCanReply(void)
 void secondserial_Command(void)
 {
   //If the selected protocol is Tuner Studio then everything is routed via the primary serial functions but with the output diverted to the secondary serial interface
-  if(configPage9.secondarySerialProtocol == SECONDARY_SERIAL_PROTO_TUNERSTUDIO)
+  //Once TunerStudio has connected over USB, the secondary falls through to the standalone commands below until restart
+  if( (configPage9.secondarySerialProtocol == SECONDARY_SERIAL_PROTO_TUNERSTUDIO) && (currentStatus.allowTsOnSecondaryComms) )
   {
     pPrimarySerial = pSecondarySerial; //Divert the output of all primary serial functions to the secondary serial interface
     serialReceive();

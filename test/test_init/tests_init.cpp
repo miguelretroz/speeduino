@@ -333,6 +333,15 @@ void test_initialisation_secondary_serial_rx_pullup(void)
 #endif
 }
 
+// The secondary serial may use the TunerStudio protocol after every restart, until TunerStudio connects over USB
+void test_initialisation_allows_ts_on_secondary_serial(void)
+{
+  currentStatus.allowTsOnSecondaryComms = false;
+  prepareForInitialiseAll(3);
+  initialiseAll();
+  TEST_ASSERT_TRUE(currentStatus.allowTsOnSecondaryComms);
+}
+
 void testInitialisation()
 {
   SET_UNITY_FILENAME() {
@@ -349,5 +358,6 @@ void testInitialisation()
   RUN_TEST_P(test_initialisation_user_pin_override_board_default);
   RUN_TEST_P(test_initialisation_input_user_pin_does_not_override_outputpin);
   RUN_TEST_P(test_initialisation_secondary_serial_rx_pullup);
+  RUN_TEST_P(test_initialisation_allows_ts_on_secondary_serial);
   }
 }

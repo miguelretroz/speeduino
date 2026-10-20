@@ -616,6 +616,13 @@ static void burnSinglePage(uint8_t page)
   }
 }
 
+// When TunerStudio connects over USB, stop the secondary serial from using the TunerStudio protocol until restart.
+// Both interfaces share the same receive state, so TunerStudio on both at once mixes their bytes and locks up comms.
+TESTABLE_STATIC void lockOutSecondaryTunerStudio(const Stream &port, statuses &current)
+{
+  if (&port == &Serial) { current.allowTsOnSecondaryComms = false; }
+}
+
 void processSerialCommand(void)
 {
   switch (serialPayload[0])
@@ -924,6 +931,7 @@ void processSerialCommand(void)
       (void)memcpy_P(serialPayload, productString, sizeof(productString) );
       sendSerialPayloadNonBlocking(sizeof(productString));
       currentStatus.secl = 0; //This is required in TS3 due to its stricter timings
+      lockOutSecondaryTunerStudio(primarySerial, currentStatus);
       break;
 
     case 'T': //Send 256 tooth log entries to Tuner Studios tooth logger

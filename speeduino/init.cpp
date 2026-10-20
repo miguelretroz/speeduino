@@ -148,6 +148,7 @@ void initialiseAll(void)
 
     pPrimarySerial = &Serial; //Default to standard Serial interface
     currentStatus.allowLegacyComms = true; //Flag legacy comms as being allowed on startup
+    currentStatus.allowTsOnSecondaryComms = true; //Allow the TunerStudio protocol on the secondary serial on startup
 
     //Set the pin mappings
     if((configPage2.pinMapping == 255) || (configPage2.pinMapping == 0)) //255 = EEPROM value in a blank AVR; 0 = EEPROM value in new FRAM
