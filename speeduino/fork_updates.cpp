@@ -30,6 +30,9 @@ static void __attribute__((optimize("Os"))) upgradeToV3(config15 &page15)
 static void __attribute__((optimize("Os"))) upgradeToV4(config15 &page15)
 {
   pidTuneController::details::setDefaults(page15);
+  // The gain adaptation multipliers start at 100%, whatever the EEPROM had
+  savePidAdaptIdle(pidTune::GainAdapter::DEFAULT_MULTIPLIER);
+  savePidAdaptEgo(pidTune::GainAdapter::DEFAULT_MULTIPLIER);
 }
 
 void __attribute__((optimize("Os"))) doForkUpdates(config15 &page15)

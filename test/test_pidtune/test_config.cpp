@@ -44,6 +44,9 @@ static void test_pidtune_defaults_on_fresh_eeprom(void)
 
     assert_pidtune_defaults();
     TEST_ASSERT_EQUAL(FORK_CONFIG_V4, fakeForkStorage.version);
+    // The gain adaptation starts at 100%
+    TEST_ASSERT_EQUAL_UINT8(100U, fakeForkStorage.pidAdaptIdle);
+    TEST_ASSERT_EQUAL_UINT8(100U, fakeForkStorage.pidAdaptEgo);
 }
 
 // A board on config version 3: keep the cold start and oil settings, add the auto tune defaults
@@ -57,6 +60,8 @@ static void test_v3_upgrade_adds_pidtune_defaults(void)
     configPage15.oilTempAlertOn = temperatureAddOffset(120);
     fakeForkStorage.attempts = 2U;
     fakeForkStorage.version = FORK_CONFIG_V3;
+    fakeForkStorage.pidAdaptIdle = 120U;
+    fakeForkStorage.pidAdaptEgo = 77U;
     // Unused bytes before version 4
     memset(getPidTuneBytes(), 0xFF, PIDTUNE_BYTES);
 
@@ -64,6 +69,9 @@ static void test_v3_upgrade_adds_pidtune_defaults(void)
 
     assert_pidtune_defaults();
     TEST_ASSERT_EQUAL(FORK_CONFIG_V4, fakeForkStorage.version);
+    // Whatever was in the EEPROM before, the gain adaptation starts at 100%
+    TEST_ASSERT_EQUAL_UINT8(100U, fakeForkStorage.pidAdaptIdle);
+    TEST_ASSERT_EQUAL_UINT8(100U, fakeForkStorage.pidAdaptEgo);
     // Untouched
     TEST_ASSERT_EQUAL(1U, configPage15.coldStartEnable);
     TEST_ASSERT_EQUAL(22U, configPage15.coldStartPin);
