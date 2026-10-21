@@ -274,6 +274,33 @@ static void test_apply_refused_after_a_mode_change(void)
     TEST_ASSERT_FALSE(pidTuneState.isUiRefresh);
 }
 
+// The measurements are kept: choosing another rule after the test gives its values straight away
+static void test_rule_change_after_the_test(void)
+{
+    run_idle_tune_to_done();
+    TEST_ASSERT_EQUAL_UINT8(10U, pidTuneState.result.kp);
+    TEST_ASSERT_EQUAL_UINT8(3U, pidTuneState.result.ki);
+
+    // Gentle: Kc = Ku/3.2 = 0.318, Ti = 2.2 Tu = 6.6S
+    configPage15.pidTuneRule = (uint8_t)TuneRule::GentlePI;
+    run_control(TEST_START_MS);
+    TEST_ASSERT_EQUAL_UINT8(10U, pidTuneState.result.kp);
+    TEST_ASSERT_EQUAL_UINT8(2U, pidTuneState.result.ki);
+
+    // Fast: Kc = 0.45 Ku = 0.458, Ti = Tu/1.2 = 2.5S
+    configPage15.pidTuneRule = (uint8_t)TuneRule::FastPI;
+    run_control(TEST_START_MS);
+    TEST_ASSERT_EQUAL_UINT8(15U, pidTuneState.result.kp);
+    TEST_ASSERT_EQUAL_UINT8(6U, pidTuneState.result.ki);
+
+    // Once applied, the result stays as applied
+    (void)send_command(TS_CMD_PIDTUNE_APPLY, TEST_START_MS);
+    configPage15.pidTuneRule = (uint8_t)TuneRule::BalancedPI;
+    run_control(TEST_START_MS);
+    TEST_ASSERT_EQUAL_UINT8(15U, pidTuneState.result.kp);
+    TEST_ASSERT_EQUAL_UINT8(15U, configPage6.idleKP);
+}
+
 static void test_apply_needs_a_result(void)
 {
     setup_idle_tune();
@@ -444,6 +471,7 @@ void testPidTuneController(void)
     RUN_TEST_P(test_abort_command);
     RUN_TEST_P(test_apply_idle_result);
     RUN_TEST_P(test_apply_refused_after_a_mode_change);
+    RUN_TEST_P(test_rule_change_after_the_test);
     RUN_TEST_P(test_apply_needs_a_result);
     RUN_TEST_P(test_idle_gains_are_the_config_bytes);
     RUN_TEST_P(test_commands_of_other_groups_are_ignored);

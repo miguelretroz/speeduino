@@ -60,6 +60,7 @@ namespace details {
     pidTune::RelayTuner tuner;
     pidTune::tuneBytes_t result = {};  ///< Suggested bytes, valid when the tuner is Done
     uint16_t ultimateGainQ8 = 0U;      ///< For display
+    uint8_t resultRule = 0U;           ///< Tuning rule the result was worked out with
     TuneLoop loop = TuneLoop::Idle;
     bool isActive = false;             ///< A test is running, or stopped and not handed back to the PID yet
     bool isApplied = false;            ///< The result was written to the tune

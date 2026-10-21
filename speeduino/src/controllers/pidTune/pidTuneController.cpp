@@ -88,6 +88,7 @@ static void computeResult(const config15 &page15)
   // Q12 to Q8, for display
   const uint32_t ultimateGainQ8 = ultimateGainQ12 >> (GAIN_FRACTION_BITS - 8U);
   pidTuneState.ultimateGainQ8 = (ultimateGainQ8 > UINT16_MAX) ? (uint16_t)UINT16_MAX : (uint16_t)ultimateGainQ8;
+  pidTuneState.resultRule = page15.pidTuneRule;
 }
 
 /** @brief Once the test has stopped: hand the loop back to its PID and work out the result */
@@ -345,6 +346,11 @@ TESTABLE_INLINE_STATIC void pidTuneControlCore(statuses &current, const config2 
     else { pidTuneState.tuner.update(nowMs); }
   }
   finishIfStopped(page15);
+  // Another rule chosen after the test: the same measurements give other values, so rules can be compared before applying
+  if ((pidTuneState.tuner.getPhase() == TunePhase::Done) && !pidTuneState.isApplied && (page15.pidTuneRule != pidTuneState.resultRule))
+  {
+    computeResult(page15);
+  }
 
   const bool isRunning = (current.rotationStatus == EngineRotationStatus::Running);
   const bool isStopping = pidTuneState.wasRunning && !isRunning;
