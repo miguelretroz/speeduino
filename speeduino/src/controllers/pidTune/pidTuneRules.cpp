@@ -38,11 +38,10 @@ static ruleFactors_t getRuleFactors(TuneRule rule)
 {
   switch (rule)
   {
-    case TuneRule::TyreusLuybenPID:   return { 465U, 2253U, 163U }; // 1/2.2, 2.2, 1/6.3
-    case TuneRule::ZieglerNicholsPI:  return { 461U, 853U, 0U };    // 0.45, 1/1.2
-    case TuneRule::ZieglerNicholsPID: return { 614U, 512U, 128U };  // 0.6, 0.5, 0.125
-    case TuneRule::TyreusLuybenPI:
-    default:                          return { 320U, 2253U, 0U };   // 1/3.2, 2.2
+    case TuneRule::GentlePI:   return { 320U, 2253U, 0U }; // 1/3.2, 2.2
+    case TuneRule::FastPI:     return { 461U, 853U, 0U };  // 0.45, 1/1.2
+    case TuneRule::BalancedPI:
+    default:                   return { 307U, 1024U, 0U }; // 0.3, 1
   }
 }
 

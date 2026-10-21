@@ -16,13 +16,18 @@
 
 namespace pidTune {
 
-/** @brief Tuning rules, as stored in the config */
+/**
+ * @brief Tuning rules, as stored in the config
+ *
+ * All PI: the PIDs of the firmware have no derivative filter, and with the dead time of the idle and AFR loops
+ * even a small D made the loop unstable in simulation. The relay test already underestimates Ku a little, which
+ * adds some margin to every rule.
+ */
 enum class TuneRule : uint8_t
 {
-  TyreusLuybenPI,    ///< Kc = Ku/3.2, Ti = 2.2 Tu. Conservative, little overshoot (default)
-  TyreusLuybenPID,   ///< Kc = Ku/2.2, Ti = 2.2 Tu, Td = Tu/6.3
-  ZieglerNicholsPI,  ///< Kc = 0.45 Ku, Ti = Tu/1.2. Faster, oscillates more
-  ZieglerNicholsPID, ///< Kc = 0.6 Ku, Ti = Tu/2, Td = Tu/8. Aggressive
+  BalancedPI, ///< Kc = 0.3 Ku, Ti = Tu. Settles in a few periods and stays stable with twice the loop gain (default)
+  GentlePI,   ///< Tyreus-Luyben: Kc = Ku/3.2, Ti = 2.2 Tu. The most robust, but slow
+  FastPI,     ///< Ziegler-Nichols: Kc = 0.45 Ku, Ti = Tu/1.2. Faster, but oscillates if the loop gain rises
 };
 
 /** @brief Number of fractional bits of the gains */
@@ -60,7 +65,8 @@ tuneBytes_t toIdlePositionalBytes(const controllerDesign_t &design);
  *
  * That mode feeds the previous output back as the feed forward term, so the PID works on the change of the
  * output (velocity form): the P byte acts as the integral, the D byte as the proportional (on the RPM) and the
- * I byte would be a double integral. So the result is a PI: the D of the rule can't be used and I is 0.
+ * I byte would be a double integral, so it's 0. As each change of the output is truncated to whole quarter
+ * steps, errors below 32/P RPM are never corrected in that mode: the open + closed loop mode doesn't have that.
  */
 tuneBytes_t toIdleVelocityBytes(const controllerDesign_t &design);
 

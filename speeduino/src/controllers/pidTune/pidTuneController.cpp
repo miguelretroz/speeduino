@@ -40,7 +40,7 @@ void setDefaults(config15 &page15)
   page15.pidTuneIdleAmplitude = 8U;   // 8 steps or 8% duty
   page15.pidAdaptIdle = 0U;
   page15.pidAdaptEgo = 0U;
-  page15.pidTuneRule = (uint8_t)TuneRule::TyreusLuybenPI;
+  page15.pidTuneRule = (uint8_t)TuneRule::BalancedPI;
   page15.pidTuneUnused = 0U;
 }
 

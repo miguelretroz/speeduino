@@ -35,7 +35,7 @@ static void test_log_bytes_after_an_idle_tune(void)
     TEST_ASSERT_EQUAL_HEX8(0x03U, logByte(0U)); // Done, idle
     TEST_ASSERT_EQUAL_UINT8(0U, logByte(1U));
     TEST_ASSERT_EQUAL_UINT8(10U, logByte(2U));
-    TEST_ASSERT_EQUAL_UINT8(2U, logByte(3U));
+    TEST_ASSERT_EQUAL_UINT8(3U, logByte(3U));
     TEST_ASSERT_EQUAL_UINT8(0U, logByte(4U));
     TEST_ASSERT_EQUAL_UINT16(3000U, word(logByte(6U), logByte(5U)));
     TEST_ASSERT_EQUAL_UINT16(40U, word(logByte(8U), logByte(7U)));

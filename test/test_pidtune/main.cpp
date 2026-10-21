@@ -10,6 +10,7 @@ void runAllTests(void)
     extern void testPidTuneLog(void);
     extern void testGainAdapter(void);
     extern void testPidTuneAdaptation(void);
+    extern void testPidTuneEndToEnd(void);
 
     testRelayTuner();
     testPidTuneRules();
@@ -18,6 +19,7 @@ void runAllTests(void)
     testPidTuneLog();
     testGainAdapter();
     testPidTuneAdaptation();
+    testPidTuneEndToEnd();
 }
 
 TEST_HARNESS(runAllTests)

@@ -29,45 +29,48 @@ static void test_ultimate_gain(void)
 
 static void test_design_rules(void)
 {
-    controllerDesign_t design = designController(TuneRule::TyreusLuybenPI, 13038U, 2000U);
-    TEST_ASSERT_EQUAL_UINT32(4074U, design.kcQ12);
-    TEST_ASSERT_EQUAL_UINT32(4400U, design.tiMs);
+    // Ku 3.183, Tu 2S
+    controllerDesign_t design = designController(TuneRule::BalancedPI, 13038U, 2000U);
+    TEST_ASSERT_EQUAL_UINT32(3909U, design.kcQ12); // 0.3 Ku
+    TEST_ASSERT_EQUAL_UINT32(2000U, design.tiMs);  // Tu
     TEST_ASSERT_EQUAL_UINT32(0U, design.tdMs);
 
-    design = designController(TuneRule::TyreusLuybenPID, 13038U, 2000U);
-    TEST_ASSERT_EQUAL_UINT32(5921U, design.kcQ12);
-    TEST_ASSERT_EQUAL_UINT32(4400U, design.tiMs);
-    TEST_ASSERT_EQUAL_UINT32(318U, design.tdMs);
-
-    design = designController(TuneRule::ZieglerNicholsPI, 13038U, 2000U);
-    TEST_ASSERT_EQUAL_UINT32(5870U, design.kcQ12);
-    TEST_ASSERT_EQUAL_UINT32(1666U, design.tiMs);
+    design = designController(TuneRule::GentlePI, 13038U, 2000U);
+    TEST_ASSERT_EQUAL_UINT32(4074U, design.kcQ12); // Ku/3.2
+    TEST_ASSERT_EQUAL_UINT32(4400U, design.tiMs);  // 2.2 Tu
     TEST_ASSERT_EQUAL_UINT32(0U, design.tdMs);
 
-    design = designController(TuneRule::ZieglerNicholsPID, 13038U, 2000U);
-    TEST_ASSERT_EQUAL_UINT32(7818U, design.kcQ12);
-    TEST_ASSERT_EQUAL_UINT32(1000U, design.tiMs);
-    TEST_ASSERT_EQUAL_UINT32(250U, design.tdMs);
+    design = designController(TuneRule::FastPI, 13038U, 2000U);
+    TEST_ASSERT_EQUAL_UINT32(5870U, design.kcQ12); // 0.45 Ku
+    TEST_ASSERT_EQUAL_UINT32(1666U, design.tiMs);  // Tu/1.2
+    TEST_ASSERT_EQUAL_UINT32(0U, design.tdMs);
+
+    // Not a rule (the config has 2 bits): the default one
+    design = designController((TuneRule)3U, 13038U, 2000U);
+    TEST_ASSERT_EQUAL_UINT32(3909U, design.kcQ12);
 }
 
 static void test_design_limits_the_period(void)
 {
-    controllerDesign_t design = designController(TuneRule::TyreusLuybenPI, 4096U, 50U);
+    controllerDesign_t design = designController(TuneRule::GentlePI, 4096U, 50U);
     TEST_ASSERT_EQUAL_UINT32(220U, design.tiMs); // 100mS * 2.2
 }
 
 static void test_idle_positional_bytes(void)
 {
     // PWM valve: 5% relay (125), +/-50 RPM, 2S period
-    assert_bytes(32U, 7U, 0U, false, false, toIdlePositionalBytes(designController(TuneRule::TyreusLuybenPI, 13038U, 2000U)));
-    assert_bytes(46U, 11U, 59U, false, false, toIdlePositionalBytes(designController(TuneRule::TyreusLuybenPID, 13038U, 2000U)));
+    assert_bytes(31U, 15U, 0U, false, false, toIdlePositionalBytes(designController(TuneRule::BalancedPI, 13038U, 2000U)));
+    assert_bytes(32U, 7U, 0U, false, false, toIdlePositionalBytes(designController(TuneRule::GentlePI, 13038U, 2000U)));
+    // With a derivative time (no rule has one, but the conversion supports it): KD = 128 Kc Td
+    const controllerDesign_t withD = { 5921U, 4400U, 318U };
+    assert_bytes(46U, 11U, 59U, false, false, toIdlePositionalBytes(withD));
 }
 
 static void test_idle_velocity_bytes(void)
 {
     // Stepper: +/-5 steps realized (20 quarter steps), +/-45 RPM, 2.5S period.
     // The I action (P byte) rounds to 0, so it's raised to 1.
-    controllerDesign_t design = designController(TuneRule::TyreusLuybenPI, computeUltimateGainQ12(20U, 45U), 2500U);
+    controllerDesign_t design = designController(TuneRule::GentlePI, computeUltimateGainQ12(20U, 45U), 2500U);
     TEST_ASSERT_EQUAL_UINT32(724U, design.kcQ12);
     TEST_ASSERT_EQUAL_UINT32(5500U, design.tiMs);
     assert_bytes(1U, 0U, 6U, false, true, toIdleVelocityBytes(design));
@@ -80,11 +83,14 @@ static void test_idle_velocity_bytes(void)
 static void test_ego_bytes(void)
 {
     // Wideband: 4% relay, +/-0.6 AFR, 1.2S period, a closed loop step every 133mS. The P byte saturates.
-    assert_bytes(200U, 10U, 0U, true, false, toEgoBytes(designController(TuneRule::TyreusLuybenPI, 3477U, 1200U), 133U));
-    assert_bytes(200U, 44U, 23U, true, false, toEgoBytes(designController(TuneRule::ZieglerNicholsPID, 3477U, 1200U), 133U));
+    assert_bytes(200U, 10U, 0U, true, false, toEgoBytes(designController(TuneRule::GentlePI, 3477U, 1200U), 133U));
+    assert_bytes(200U, 27U, 0U, true, false, toEgoBytes(designController(TuneRule::FastPI, 3477U, 1200U), 133U));
+    // With a derivative time: KD = 100 Kc Td / Ts
+    const controllerDesign_t withD = { 2085U, 600U, 150U };
+    assert_bytes(200U, 44U, 23U, true, false, toEgoBytes(withD, 133U));
 
     // A less sensitive loop doesn't saturate: 2% relay, +/-2.0 AFR
-    assert_bytes(40U, 2U, 0U, false, false, toEgoBytes(designController(TuneRule::TyreusLuybenPI, computeUltimateGainQ12(2U, 20U), 1200U), 133U));
+    assert_bytes(40U, 2U, 0U, false, false, toEgoBytes(designController(TuneRule::GentlePI, computeUltimateGainQ12(2U, 20U), 1200U), 133U));
 }
 
 static void test_saturation_scales_all_bytes(void)
@@ -111,7 +117,7 @@ static void test_quantised_bytes_are_raised(void)
 
 static void test_ego_sample_period_guards(void)
 {
-    controllerDesign_t design = designController(TuneRule::TyreusLuybenPID, 3477U, 1200U);
+    const controllerDesign_t design = { 819U, 2640U, 191U };
     // No division by zero: treated as 1mS, so the D term is huge and the bytes are scaled down to fit it
     tuneBytes_t bytes = toEgoBytes(design, 0U);
     TEST_ASSERT_EQUAL_UINT8(200U, bytes.kd);

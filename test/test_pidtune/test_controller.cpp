@@ -131,10 +131,10 @@ static void test_idle_tune_done(void)
     TEST_ASSERT_EQUAL(TunePhase::Done, pidTuneState.tuner.getPhase());
     TEST_ASSERT_EQUAL(3000U, pidTuneState.tuner.getPeriodMs());
     TEST_ASSERT_EQUAL(40U, pidTuneState.tuner.getAmplitude());
-    // Ku = 4 * 32 / (pi * 40) = 1.02, Tyreus-Luyben PI: Kc = 0.318, Ti = 6.6S
+    // Ku = 4 * 32 / (pi * 40) = 1.02, balanced PI: Kc = 0.3 Ku = 0.305, Ti = Tu = 3S
     TEST_ASSERT_EQUAL_UINT16(260U, pidTuneState.ultimateGainQ8);
     TEST_ASSERT_EQUAL_UINT8(10U, pidTuneState.result.kp);
-    TEST_ASSERT_EQUAL_UINT8(2U, pidTuneState.result.ki);
+    TEST_ASSERT_EQUAL_UINT8(3U, pidTuneState.result.ki);
     TEST_ASSERT_EQUAL_UINT8(0U, pidTuneState.result.kd);
 
     // Back to the PID, at the position the test started from
@@ -226,7 +226,7 @@ static void test_apply_idle_result(void)
     TEST_ASSERT_TRUE(send_command(TS_CMD_PIDTUNE_APPLY, TEST_START_MS));
 
     TEST_ASSERT_EQUAL_UINT8(10U, configPage6.idleKP);
-    TEST_ASSERT_EQUAL_UINT8(2U, configPage6.idleKI);
+    TEST_ASSERT_EQUAL_UINT8(3U, configPage6.idleKI);
     TEST_ASSERT_EQUAL_UINT8(0U, configPage6.idleKD);
     TEST_ASSERT_TRUE(pidTuneState.isApplied);
     TEST_ASSERT_TRUE(pidTuneState.isUiRefresh);
@@ -351,7 +351,7 @@ static void test_ego_tune_done(void)
     TEST_ASSERT_EQUAL(125U, pidTuneState.tuner.getSamplePeriodMs());
     // Ku = 4 * 5 / (pi * 4) = 1.59: the P term saturates at 200
     TEST_ASSERT_EQUAL_UINT8(200U, pidTuneState.result.kp);
-    TEST_ASSERT_EQUAL_UINT8(8U, pidTuneState.result.ki);
+    TEST_ASSERT_EQUAL_UINT8(17U, pidTuneState.result.ki);
     TEST_ASSERT_EQUAL_UINT8(0U, pidTuneState.result.kd);
     TEST_ASSERT_TRUE(pidTuneState.result.saturated);
 
@@ -362,7 +362,7 @@ static void test_ego_tune_done(void)
     // Apply writes the AFR bytes
     (void)send_command(TS_CMD_PIDTUNE_APPLY, nowMs);
     TEST_ASSERT_EQUAL_UINT8(200U, configPage6.egoKP);
-    TEST_ASSERT_EQUAL_UINT8(8U, configPage6.egoKI);
+    TEST_ASSERT_EQUAL_UINT8(17U, configPage6.egoKI);
     TEST_ASSERT_EQUAL_UINT8(0U, configPage6.egoKD);
     TEST_ASSERT_TRUE(pidTuneEgoTakeBumpless());
     TEST_ASSERT_FALSE(pidTuneIdleTakeBumpless());
