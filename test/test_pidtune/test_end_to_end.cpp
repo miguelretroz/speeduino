@@ -189,6 +189,59 @@ static void test_idle_end_to_end_velocity_form(void)
     TEST_ASSERT_LESS_OR_EQUAL_INT16(4, highest - lowest);
 }
 
+/** @brief Deterministic noise, uniform in +/-amplitude */
+static int16_t noiseSample(uint32_t &seed, int16_t amplitude)
+{
+    seed = (seed * 1103515245UL) + 12345UL;
+    const int32_t value = (int32_t)((seed >> 16) % (uint32_t)((2 * amplitude) + 1)) - amplitude;
+    return (int16_t)value;
+}
+
+// The same idle with +/-12 RPM of noise: the test still converges, and the loop then holds the target
+static void test_idle_end_to_end_with_noise(void)
+{
+    constexpr int16_t NOISE = 12;
+    plant_t plant = makeIdlePlant();
+    uint32_t seed = 1U;
+
+    RelayTuner tuner;
+    const relayConfig_t config = makeRelayConfig(400, 32, 15U, 1);
+    plant.reset();
+    uint32_t nowMs = 0U;
+    int32_t output = config.base;
+    tuner.start(config, nowMs);
+    while (tuner.isRunning())
+    {
+        const int16_t value = plant.step(output) + noiseSample(seed, NOISE);
+        output = tuner.sample(value, output, nowMs);
+        nowMs += 250U;
+    }
+    TEST_ASSERT_EQUAL(TunePhase::Done, tuner.getPhase());
+    // Noiseless: Ku 0.91 (Q12 3708). Noise widens the swing, so it reads a little low.
+    const uint32_t ultimateGain = computeUltimateGainQ12(tuner.getRelayAmplitude(), tuner.getAmplitude());
+    TEST_ASSERT_UINT32_WITHIN(1100U, 3708U, ultimateGain);
+
+    const tuneBytes_t bytes = toIdlePositionalBytes(designController(TuneRule::BalancedPI, ultimateGain, tuner.getPeriodMs()));
+    integerPID pid;
+    pid.setOutputLimits(0, 1200);
+    pid.setTunings(PidTuningParameters(bytes.kp, bytes.ki, bytes.kd), 10000UL, 250U);
+    pid.setSetPoint(950);
+    plant.reset();
+    int16_t value = plant.step(400);
+    pid.activate(value);
+    pid.presetOutput(400, value);
+    uint32_t errorSum = 0U;
+    for (uint16_t index = 0U; index < 480U; ++index)
+    {
+        TEST_ASSERT_TRUE(pid.compute(10000UL + (index * 250UL), value, &output));
+        const int16_t trueValue = plant.step(output);
+        value = trueValue + noiseSample(seed, NOISE);
+        if (index >= 360U) { errorSum += (uint32_t)abs(trueValue - 950); }
+    }
+    // The last 30S: on target, give or take the noise it reacts to
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(8U * 120U, errorSum);
+}
+
 // AFR: the fuel correction (%) against the AFR (x10). 1% fuel = 0.9 x10 AFR (stoich 9), 0.3S lag,
 // 0.5S dead time, one closed loop step every 125mS.
 static void test_ego_end_to_end(void)
@@ -237,6 +290,7 @@ void testPidTuneEndToEnd(void)
     RUN_TEST_P(test_idle_end_to_end_gentle_pi);
     RUN_TEST_P(test_idle_end_to_end_fast_pi);
     RUN_TEST_P(test_idle_end_to_end_velocity_form);
+    RUN_TEST_P(test_idle_end_to_end_with_noise);
     RUN_TEST_P(test_ego_end_to_end);
   }
 }
