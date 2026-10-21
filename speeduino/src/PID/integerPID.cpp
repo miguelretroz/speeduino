@@ -32,11 +32,11 @@ static PidTuningParameters scaleTuningParameters(const PidTuningParameters& para
     return scaledParams;
 }
 
-void integerPID::setTunings(const PidTuningParameters &pidParams, uint32_t nowMs, uint16_t minComputeInterval)
+void integerPID::setTunings(const PidTuningParameters &pidParams, uint32_t nowMs, uint16_t minComputeInterval, bool bumpless)
 {
    _sampleTime = minComputeInterval;
    _lastTime = nowMs - minComputeInterval;
-   _pidCore.setTunings(scaleTuningParameters(pidParams, minComputeInterval));
+   _pidCore.setTunings(scaleTuningParameters(pidParams, minComputeInterval), bumpless);
 }
 
 void integerPID::setOutputLimits(int32_t min, int32_t max)
@@ -64,7 +64,15 @@ void integerPID::resetIntegeral(void)
    _pidCore.resetIntegral();
 }
 
-void integerPID::setFeedForwardTerm(int32_t feedForwardTerm) 
-{ 
-   _feedForwardTerm = feedForwardTerm << PID_SHIFTS; 
+void integerPID::setFeedForwardTerm(int32_t feedForwardTerm)
+{
+   _feedForwardTerm = feedForwardTerm << PID_SHIFTS;
+}
+
+void integerPID::presetOutput(int32_t desiredOutput, int32_t input)
+{
+   _lastInput = input;
+   // Aim for the middle of the output step, so the final shift can't round it down
+   constexpr int32_t HALF_OUTPUT_STEP = 1L << (PID_SHIFTS - 1U);
+   _pidCore.presetIntegral((desiredOutput << PID_SHIFTS) + HALF_OUTPUT_STEP, _feedForwardTerm, _setpoint - input);
 }

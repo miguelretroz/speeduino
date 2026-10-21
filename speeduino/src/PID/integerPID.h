@@ -21,12 +21,13 @@ public:
   
   /**
    * @brief Set the PID tuning parameters
-   * 
+   *
    * @param pidParams P, I & D terms
    * @param nowMs Current time in milliseconds
    * @param minComputeInterval Minimum time that should elapse between computations (in milliseconds)
+   * @param bumpless Keep the integral term unchanged, so a new I gain doesn't make the output jump
    */
-  void setTunings(const PidTuningParameters &pidParams, uint32_t nowMs, uint16_t minComputeInterval);
+  void setTunings(const PidTuningParameters &pidParams, uint32_t nowMs, uint16_t minComputeInterval, bool bumpless = false);
 
   /** @brief (Optional) Set the feed forward term (predictive bias) */
   void setFeedForwardTerm(int32_t feedForwardTerm);
@@ -51,6 +52,16 @@ public:
 
   /** @brief (Optional) Reset the integral term */
   void resetIntegeral(void);
+
+  /**
+   * @brief Make the next compute() return the desired output, for an unchanged input and feed forward term
+   *
+   * Hands control back to the controller without a jump, after something else has driven the output.
+   *
+   * @param desiredOutput The output the next compute() should return
+   * @param input The current input value
+   */
+  void presetOutput(int32_t desiredOutput, int32_t input);
 
 private:
 

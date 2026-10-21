@@ -16,8 +16,13 @@ public:
   /** @brief Set the output limits */
   void setOutputLimits(int32_t min, int32_t max);
 
-  /** @brief Set the PID parameters */
-  void setTunings(PidTuningParameters params);
+  /**
+   * @brief Set the PID parameters
+   *
+   * @param params P, I & D terms
+   * @param bumpless Keep the integral term unchanged, so a new I gain doesn't make the output jump
+   */
+  void setTunings(PidTuningParameters params, bool bumpless = false);
 
   /** @brief Set the controller set point */
   void setSetPoint(uint16_t setpoint) { _setpoint = setpoint; }
@@ -37,6 +42,16 @@ public:
    * @return A correction to be applied to the input.
    */
   int32_t compute(int32_t input);
+
+  /**
+   * @brief Make the next compute() return the desired correction, for an unchanged input
+   *
+   * Hands control back to the controller without a jump, after something else has driven the output.
+   *
+   * @param desiredOutput The correction the next compute() should return
+   * @param input The current input value
+   */
+  void presetOutput(int32_t desiredOutput, int32_t input);
 
 private:
   int16_t _setpoint = 0;

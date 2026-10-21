@@ -16,10 +16,10 @@ int32_t PID::compute(int32_t input)
    return output/1000;
 }
 
-void PID::setTunings(PidTuningParameters pidParams)
+void PID::setTunings(PidTuningParameters pidParams, bool bumpless)
 {
   pidParams.Kd = pidParams.Kd * 10;
-  _pidCore.setTunings(pidParams);
+  _pidCore.setTunings(pidParams, bumpless);
 }
 
 void PID::setOutputLimits(int32_t Min, int32_t Max)
@@ -31,4 +31,12 @@ void PID::resetIntegral(int32_t input)
 {
    _pidCore.resetIntegral();
    _lastInput = input;
+}
+
+void PID::presetOutput(int32_t desiredOutput, int32_t input)
+{
+   _lastInput = input;
+   // compute() truncates towards zero, so aim for the middle of the output step
+   const int32_t halfStep = (desiredOutput < 0) ? -500L : ((desiredOutput > 0) ? 500L : 0L);
+   _pidCore.presetIntegral((desiredOutput * 1000L) + halfStep, 0L, _setpoint - input);
 }

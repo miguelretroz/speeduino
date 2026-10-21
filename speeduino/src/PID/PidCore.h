@@ -17,15 +17,30 @@ public:
         _max = max;
     }
 
-    /** @brief Set the PID parameters */
-    void setTunings(const PidTuningParameters& params) { 
-        _pidParams = params; 
+    /**
+     * @brief Set the PID parameters
+     *
+     * @param params The new parameters
+     * @param bumpless Rescale the integral so the integral term (Ki * integral) is unchanged.
+     * Otherwise a new Ki makes the output jump.
+     */
+    void setTunings(const PidTuningParameters& params, bool bumpless = false) {
+        if (bumpless) { rescaleIntegral(_pidParams.Ki, params.Ki); }
+        _pidParams = params;
     }
 
     /** @brief (Optional) Reset the integral term */
-    void resetIntegral(void) { 
-        _integralTerm = 0; 
+    void resetIntegral(void) {
+        _integralTerm = 0;
     }
+
+    /**
+     * @brief Preset the integral, so the next compute() returns the desired output (before clamping)
+     *
+     * Assumes the next compute() gets the same error and a zero derivative (I.e. an unchanged input).
+     * With a zero Ki the integral is just reset, as it has no effect on the output.
+     */
+    void presetIntegral(int32_t desiredOutput, int32_t feedForwardTerm, int32_t error);
 
     /** @brief Compute the next correction. */
     int32_t compute(int32_t feedForwardTerm, int32_t error, int32_t derivative);
@@ -33,6 +48,8 @@ public:
 #if !defined(UNIT_TEST)
 private:
 #endif
+
+    void rescaleIntegral(int16_t oldKi, int16_t newKi);
 
     PidTuningParameters _pidParams;
 
