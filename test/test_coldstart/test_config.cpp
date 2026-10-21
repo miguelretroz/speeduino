@@ -28,7 +28,7 @@ static void test_defaults_applied_to_fresh_eeprom(void)
     TEST_ASSERT_EQUAL(80U, configPage15.coldStartCutBattery);
     TEST_ASSERT_EQUAL(10U, configPage15.coldStartKeyOnReset);
     TEST_ASSERT_EQUAL(0U, fakeForkStorage.attempts);
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V3, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
 }
 
 // A board initialised by the first release: keep its settings, only initialise the new fields
@@ -52,7 +52,7 @@ static void test_v1_upgrade_keeps_settings(void)
     TEST_ASSERT_EQUAL(2U, fakeForkStorage.attempts);
     TEST_ASSERT_EQUAL(80U, configPage15.coldStartCutBattery);
     TEST_ASSERT_EQUAL(10U, configPage15.coldStartKeyOnReset);
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V3, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
 
     // Already upgraded: nothing changes on the next boot
     configPage15.coldStartKeyOnReset = 5U;

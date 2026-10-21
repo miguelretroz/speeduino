@@ -924,11 +924,30 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-197
-  byte Unused15_106_197[92];
+  //Bytes 106-185
+  byte Unused15_106_185[80];
 
-  //Bytes 198-255 - Fork specific features.
+  //Bytes 186-255 - Fork specific features.
   //Allocated from the end of the page to stay clear of upstream additions: new fields go *before* the existing ones.
+
+  //Bytes 186-196 - PID auto tune and gain adaptation (idle and AFR closed loop)
+  byte pidAdaptEgoBand;         ///< Error band ignored by the gain adaptation, AFR closed loop (Unit: 0.1 AFR)
+  byte pidAdaptIdleBand;        ///< Error band ignored by the gain adaptation, idle (Unit: 1 RPM)
+  byte pidAdaptWindow;          ///< Length of each gain adaptation window (Unit: 1S)
+  byte pidAdaptStep;            ///< Gain change per adaptation window (Unit: 1%)
+  byte pidTuneTimeout;          ///< The auto tune fails if not done within this time (Unit: 1S)
+  byte pidTuneCycles;           ///< Oscillation cycles averaged by the auto tune
+  byte pidTuneEgoHyst;          ///< Relay hysteresis, AFR closed loop (Unit: 0.1 AFR)
+  byte pidTuneEgoAmplitude;     ///< Relay amplitude, AFR closed loop (Unit: 1%)
+  byte pidTuneIdleHyst;         ///< Relay hysteresis, idle (Unit: 1 RPM)
+  byte pidTuneIdleAmplitude;    ///< Relay amplitude, idle (Unit: 1 step for stepper valves, 1% duty for PWM valves)
+  byte pidAdaptIdle : 1;        ///< Continuous gain adaptation of the idle PID
+  byte pidAdaptEgo : 1;         ///< Continuous gain adaptation of the AFR closed loop PID
+  byte pidTuneRule : 2;         ///< Tuning rule (pidTune::TuneRule)
+  byte pidTuneUnused : 4;
+
+  //Byte 197 - Reserved for the cold start DS3231 counter reset (docs/cold-start-ds3231-plan.md on its branch)
+  byte Unused15_197;
 
   //Bytes 198-203 - Oil temperature. The sensor calibration is stored with the other temperature calibrations.
   byte oilTempEnable : 1;

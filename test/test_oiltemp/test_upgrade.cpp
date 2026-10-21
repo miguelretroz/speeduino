@@ -24,7 +24,7 @@ static void test_v2_upgrade_adds_oil_defaults(void)
 
     doForkUpdates(configPage15);
 
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V3, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
     // Cold start untouched
     TEST_ASSERT_EQUAL(1U, configPage15.coldStartEnable);
     TEST_ASSERT_EQUAL(5U, configPage15.coldStartKeyOnReset);
