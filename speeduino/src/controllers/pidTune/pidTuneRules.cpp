@@ -17,11 +17,11 @@ static constexpr uint16_t MIN_PERIOD_MS = 100U;
 /** @brief Longest AFR closed loop step accepted. Keeps the products below in range. */
 static constexpr uint16_t MAX_SAMPLE_PERIOD_MS = 30000U;
 
-/** @brief Highest idle byte */
-static constexpr uint8_t IDLE_BYTE_LIMIT = 255U;
+/** @brief Highest idle byte: the TunerStudio fields go up to 7.96 and 1.99 (254 counts) */
+static constexpr uint8_t IDLE_BYTE_LIMIT = 254U;
 /** @brief Highest AFR byte (the limit of the TunerStudio fields) */
 static constexpr uint8_t EGO_BYTE_LIMIT = 200U;
-/** @brief Idle gain that gives a KP of 255 (Q12): 255 / 32 */
+/** @brief Idle gain that gives the highest KP (Q12): 254 / 32 */
 static constexpr uint32_t IDLE_MAX_KC_Q12 = ((uint32_t)IDLE_BYTE_LIMIT << GAIN_FRACTION_BITS) / 32U;
 /** @brief AFR gain that gives a KP of 200 (Q12): 200 / 1000 */
 static constexpr uint32_t EGO_MAX_KC_Q12 = ((uint32_t)EGO_BYTE_LIMIT << GAIN_FRACTION_BITS) / 1000U;

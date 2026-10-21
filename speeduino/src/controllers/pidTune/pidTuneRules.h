@@ -65,8 +65,9 @@ tuneBytes_t toIdlePositionalBytes(const controllerDesign_t &design);
  *
  * That mode feeds the previous output back as the feed forward term, so the PID works on the change of the
  * output (velocity form): the P byte acts as the integral, the D byte as the proportional (on the RPM) and the
- * I byte would be a double integral, so it's 0. As each change of the output is truncated to whole quarter
- * steps, errors below 32/P RPM are never corrected in that mode: the open + closed loop mode doesn't have that.
+ * I byte would be a double integral, so it's 0. Each change of the output is rounded down to whole quarter steps,
+ * so with the RPM below the target by less than 32/P it isn't corrected, while above the target it always is: the
+ * RPM tends to sit a little low. The open + closed loop mode doesn't have that.
  */
 tuneBytes_t toIdleVelocityBytes(const controllerDesign_t &design);
 

@@ -221,8 +221,10 @@ void RelayTuner::checkConvergence(void)
       relayAmplitudeSum += _relayAmplitudes[i];
     }
 
-    // Converged once the periods agree within 20% and the amplitudes within 25%
-    if ((((uint32_t)maxPeriod - minPeriod) * 5U <= maxPeriod) && (((uint32_t)maxAmplitude - minAmplitude) * 4U <= maxAmplitude))
+    // Converged once the periods agree within 20% (or one sample, as switches happen on samples) and the amplitudes within 25%
+    const uint32_t periodSpread = (uint32_t)maxPeriod - minPeriod;
+    const bool isPeriodSteady = ((periodSpread * 5U) <= maxPeriod) || (periodSpread <= getSamplePeriodMs());
+    if (isPeriodSteady && ((((uint32_t)maxAmplitude - minAmplitude) * 4U) <= maxAmplitude))
     {
       const uint8_t halfCycles = _config.cycles / 2U;
       _periodMs = (uint16_t)((periodSum + halfCycles) / _config.cycles);

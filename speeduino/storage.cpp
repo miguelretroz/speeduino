@@ -704,6 +704,12 @@ void saveColdStartAttempts(uint8_t attempts)
   (void)update(getStorageAPI(), EEPROM_COLDSTART_ATTEMPTS, attempts);
 }
 
+void saveConfig6Bytes(const config6 &page6, const byte *pFirst, uint8_t length)
+{
+  const uint16_t offset = (uint16_t)(pFirst - (const byte *)&page6);
+  updateBlock(getStorageAPI(), EEPROM_CONFIG6_START + offset, pFirst, pFirst + length);
+}
+
 uint8_t loadPidAdaptIdle(void)
 {
   return getStorageAPI().read(EEPROM_PIDADAPT_IDLE);

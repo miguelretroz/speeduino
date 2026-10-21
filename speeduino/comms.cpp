@@ -392,7 +392,7 @@ static void generateLiveValues(uint16_t offset, uint16_t packetLength)
   }
   // Reset any flags that are being used to trigger page refreshes
   currentStatus.vssUiRefresh = false;
-  pidTuneAckUiRefresh(); // Fork
+  pidTuneAckUiRefresh(offset, packetLength); // Fork
 }
 
 // Abstract the FastCrC32 functions 

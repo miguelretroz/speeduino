@@ -260,6 +260,32 @@ static void test_relay_fails_without_convergence(void)
     TEST_ASSERT_GREATER_OR_EQUAL(config.timeoutMs, nowMs);
 }
 
+// Switches happen on samples: periods one sample apart (3 and 4 samples) are the same oscillation
+static void test_relay_tolerates_one_sample_of_jitter(void)
+{
+    RelayTuner tuner;
+    relayConfig_t config = makeConfig();
+    uint32_t nowMs = settle(tuner, config);
+
+    bool isLongCycle = false;
+    int32_t output = tuner.getOutput();
+    while (tuner.isRunning() && (nowMs < 60000UL))
+    {
+        // Each cycle starts low (that's where the relay switches up)
+        const uint8_t highSamples = isLongCycle ? 2U : 1U;
+        for (uint8_t index = 0U; tuner.isRunning() && (index < (2U + highSamples)); ++index)
+        {
+            nowMs += SAMPLE_MS;
+            output = tuner.sample((index < 2U) ? (SETPOINT - 20) : (SETPOINT + 20), output, nowMs);
+        }
+        isLongCycle = !isLongCycle;
+    }
+
+    TEST_ASSERT_EQUAL(TunePhase::Done, tuner.getPhase());
+    TEST_ASSERT_UINT_WITHIN(SAMPLE_MS, 875U, tuner.getPeriodMs());
+    TEST_ASSERT_EQUAL(20U, tuner.getAmplitude());
+}
+
 static void test_relay_abort_and_reset(void)
 {
     RelayTuner tuner;
@@ -294,6 +320,7 @@ void testRelayTuner(void)
     RUN_TEST_P(test_relay_fails_on_large_excursion);
     RUN_TEST_P(test_relay_fails_on_small_amplitude);
     RUN_TEST_P(test_relay_fails_without_convergence);
+    RUN_TEST_P(test_relay_tolerates_one_sample_of_jitter);
     RUN_TEST_P(test_relay_abort_and_reset);
   }
 }

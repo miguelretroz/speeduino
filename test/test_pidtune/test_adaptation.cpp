@@ -157,6 +157,17 @@ static void test_adapt_saved_once_stable(void)
     // Not written again while unchanged
     run_control(nowMs + (2U * ADAPT_SAVE_DELAY_MS));
     TEST_ASSERT_EQUAL_UINT16(1U, fakeForkStorage.pidAdaptWrites);
+
+    // Changed again: saved no sooner than 10 minutes after the last save, to spare the EEPROM
+    const uint32_t savedMs = nowMs + ADAPT_SAVE_DELAY_MS;
+    nowMs = oscillate_idle(nowMs + (2U * ADAPT_SAVE_DELAY_MS));
+    TEST_ASSERT_EQUAL_UINT8(90U, pidTuneState.idleAdapt.adapter.getMultiplier());
+    run_control(nowMs);
+    run_control(nowMs + ADAPT_SAVE_DELAY_MS);
+    TEST_ASSERT_EQUAL_UINT8(95U, fakeForkStorage.pidAdaptIdle);
+    run_control(savedMs + ADAPT_SAVE_INTERVAL_MS);
+    TEST_ASSERT_EQUAL_UINT8(90U, fakeForkStorage.pidAdaptIdle);
+    TEST_ASSERT_EQUAL_UINT16(2U, fakeForkStorage.pidAdaptWrites);
 }
 
 static void test_adapt_saved_when_the_engine_stops(void)

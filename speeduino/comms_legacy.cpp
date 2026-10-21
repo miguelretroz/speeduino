@@ -765,7 +765,7 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, Stream &target
   while(targetPort.available()>0) { targetPort.read(); }
   // Reset any flags that are being used to trigger page refreshes
   currentStatus.vssUiRefresh = false;
-  pidTuneAckUiRefresh(); // Fork
+  if (logFunction == &getTSLogEntry) { pidTuneAckUiRefresh(offset, packetLength); } // Fork
 }
 
 void sendValuesLegacy(void)

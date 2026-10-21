@@ -35,6 +35,8 @@ namespace details {
 
   /** @brief Gain adaptation: a multiplier is saved once it has been stable for this long (or when the engine stops) */
   constexpr uint32_t ADAPT_SAVE_DELAY_MS = 60000UL;
+  /** @brief Gain adaptation: at most one save per this long, so a multiplier going up and down doesn't wear the EEPROM */
+  constexpr uint32_t ADAPT_SAVE_INTERVAL_MS = 600000UL;
   /** @brief AFR gain adaptation: a window restarts if the RPM moves more than this from where it started (%) */
   constexpr uint8_t EGO_ADAPT_RPM_WINDOW_PCT = 15U;
 
@@ -52,7 +54,9 @@ namespace details {
     uint8_t gains[3] = {};             ///< P, I and D the multiplier applies to: a change resets it
     uint8_t appliedMultiplier = 100U;  ///< Multiplier in use (100 when the adaptation is off)
     uint8_t savedMultiplier = 100U;    ///< Multiplier in EEPROM
+    bool hasSaved = false;             ///< Saved since the start (the next save waits for ADAPT_SAVE_INTERVAL_MS)
     uint32_t changedMs = 0U;           ///< When the multiplier last changed
+    uint32_t savedMs = 0U;             ///< When the multiplier was last saved
   };
 
   struct state_t
@@ -65,7 +69,6 @@ namespace details {
     bool isActive = false;             ///< A test is running, or stopped and not handed back to the PID yet
     bool isApplied = false;            ///< The result was written to the tune
     bool isUiRefresh = false;          ///< Ask TunerStudio to reload page 6
-    bool isUiRefreshSent = false;      ///< The reload request was in the live data sent last
     bool isVelocityForm = false;       ///< Idle: stepper closed loop when the test started
     bool isIdleBumpless = false;       ///< The next idle gain change must not make the output jump
     bool isEgoBumpless = false;        ///< The next AFR gain change must not make the output jump

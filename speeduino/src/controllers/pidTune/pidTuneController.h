@@ -97,6 +97,8 @@ bool pidTuneEgoTakeBumpless(void);
 
 /** @name Live data (bytes 142 to 156 of the realtime data) */
 ///@{
+/** @brief First live data byte */
+constexpr uint16_t PIDTUNE_LOG_FIRST_BYTE = 142U;
 /** @brief Number of live data bytes */
 constexpr uint8_t PIDTUNE_LOG_BYTES = 15U;
 
@@ -114,6 +116,9 @@ constexpr uint8_t PIDTUNE_LOG_BYTES = 15U;
  */
 uint8_t getPidTuneLogByte(uint8_t index);
 
-/** @brief Call once the live data has been sent: the page reload request is cleared once it's been seen */
-void pidTuneAckUiRefresh(void);
+/**
+ * @brief Call once live data (from getTSLogEntry) has been sent: the page reload request is cleared once the bytes
+ * that carry it have gone out. TunerStudio may read the live data in several parts.
+ */
+void pidTuneAckUiRefresh(uint16_t offset, uint16_t length);
 ///@}

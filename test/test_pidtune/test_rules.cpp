@@ -95,13 +95,13 @@ static void test_ego_bytes(void)
 
 static void test_saturation_scales_all_bytes(void)
 {
-    // KI would be 320: all three are scaled by 255/320, which keeps Ti
+    // KI would be 320: all three are scaled by 254/320, which keeps Ti. 254 is the limit of the TunerStudio fields.
     controllerDesign_t design = { 4096U, 100U, 0U };
-    assert_bytes(26U, 255U, 0U, true, false, toIdlePositionalBytes(design));
+    assert_bytes(25U, 254U, 0U, true, false, toIdlePositionalBytes(design));
 
-    // The gain is past what KP can hold: limited to KP = 255
+    // The gain is past what KP can hold: limited to KP = 254
     design = { 40000U, 100000U, 0U };
-    assert_bytes(255U, 3U, 0U, true, false, toIdlePositionalBytes(design));
+    assert_bytes(254U, 3U, 0U, true, false, toIdlePositionalBytes(design));
 }
 
 static void test_quantised_bytes_are_raised(void)

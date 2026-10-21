@@ -274,9 +274,12 @@ static void updateAdaptation(adaptLoop_t &loop, bool isEnabled, uint8_t kp, uint
   }
 
   const uint8_t multiplier = loop.adapter.getMultiplier();
-  if ((multiplier != loop.savedMultiplier) && (isStopping || hasIntervalElapsed(nowMs, loop.changedMs, ADAPT_SAVE_DELAY_MS)))
+  const bool isSaveDue = !loop.hasSaved || hasIntervalElapsed(nowMs, loop.savedMs, ADAPT_SAVE_INTERVAL_MS);
+  if ((multiplier != loop.savedMultiplier) && (isStopping || (isSaveDue && hasIntervalElapsed(nowMs, loop.changedMs, ADAPT_SAVE_DELAY_MS))))
   {
     loop.savedMultiplier = multiplier;
+    loop.hasSaved = true;
+    loop.savedMs = nowMs;
     pSave(multiplier);
   }
 }
@@ -291,10 +294,10 @@ static bool isResultValidFor(const config6 &page6)
 {
   if (pidTuneState.loop == TuneLoop::Idle)
   {
-    // The bytes mean something else in stepper closed loop (velocity form)
-    return isIdleClosedLoop(page6.iacAlgorithm) && ((page6.iacAlgorithm == IAC_ALGORITHM_STEP_CL) == pidTuneState.isVelocityForm);
+    // The bytes are in the units of the valve (PWM counts or steps) and mean something else in stepper closed loop
+    return page6.iacAlgorithm == pidTuneState.iacAlgorithm;
   }
-  return page6.egoAlgorithm == EGO_ALGORITHM_PID;
+  return (page6.egoAlgorithm == EGO_ALGORITHM_PID) && (page6.egoType == EGO_TYPE_WIDE);
 }
 
 static void applyResult(config6 &page6)
@@ -328,11 +331,12 @@ static void applyResult(config6 &page6)
 
     if (pidTuneState.tuner.getPhase() == TunePhase::Done)
     {
-      // TunerStudio won't burn these, as the firmware has priority over them: burn them here and ask it to reload the page
-      savePage(afrSetPage);
+      // TunerStudio doesn't burn values it reloads from the controller: burn them here, and only them (the rest of
+      // the page may have changes not burned yet). Then ask TunerStudio to reload the page.
+      const byte *pGains = (pidTuneState.loop == TuneLoop::Idle) ? &page6.idleKP : &page6.egoKP;
+      saveConfig6Bytes(page6, pGains, 3U);
       pidTuneState.isApplied = true;
       pidTuneState.isUiRefresh = true;
-      pidTuneState.isUiRefreshSent = false;
     }
   }
 }
@@ -468,7 +472,8 @@ bool isPidTuneEgoRunning(void)
 uint8_t pidTuneEgoRelayStep(const statuses &current, uint32_t nowMs)
 {
   pidTuneState.lastSampleMs = nowMs;
-  const int32_t output = pidTuneState.tuner.sample(current.O2, current.egoCorrection, nowMs);
+  // The correction reaches the injectors as commanded. Not the last correction: a step outside the closed loop window gives 100.
+  const int32_t output = pidTuneState.tuner.sample(current.O2, pidTuneState.tuner.getOutput(), nowMs);
   finishIfStopped(configPage15);
   return (uint8_t)output;
 }
@@ -515,11 +520,7 @@ static uint8_t getStatusByte(void)
   static_assert((uint8_t)TunePhase::Failed <= 0x07U, "Phase does not fit in 3 bits");
   uint8_t status = (uint8_t)pidTuneState.tuner.getPhase();
   if (pidTuneState.loop == TuneLoop::Ego) { status |= (1U << 3U); }
-  if (pidTuneState.isUiRefresh)
-  {
-    status |= (1U << 4U);
-    pidTuneState.isUiRefreshSent = true;
-  }
+  if (pidTuneState.isUiRefresh) { status |= (1U << 4U); }
   if (pidTuneState.result.saturated) { status |= (1U << 5U); }
   if (pidTuneState.isApplied) { status |= (1U << 6U); }
   if (pidTuneState.result.quantised) { status |= (1U << 7U); }
@@ -561,13 +562,11 @@ uint8_t getPidTuneLogByte(uint8_t index)
   return value;
 }
 
-void pidTuneAckUiRefresh(void)
+void pidTuneAckUiRefresh(uint16_t offset, uint16_t length)
 {
-  // Only once the request has gone out: TunerStudio may read the live data in several parts
-  if (pidTuneState.isUiRefreshSent)
+  if ((offset <= PIDTUNE_LOG_FIRST_BYTE) && (((uint32_t)offset + length) > PIDTUNE_LOG_FIRST_BYTE))
   {
     pidTuneState.isUiRefresh = false;
-    pidTuneState.isUiRefreshSent = false;
   }
 }
 

@@ -133,6 +133,19 @@ uint8_t loadColdStartAttempts(void);
 /** @copydoc loadColdStartAttempts */
 void saveColdStartAttempts(uint8_t attempts);
 
+/**
+ * @brief Fork specific: burn some bytes of page 6 straight away, leaving the rest of the page as it is
+ *
+ * For values the firmware writes itself (E.g. the PID auto tune result): the rest of the page may have changes
+ * that haven't been burned yet, and a pending burn of another page must carry on.
+ *
+ * @param page6 The page the bytes belong to
+ * @param pFirst The first byte, in page6
+ * @param length Number of bytes
+ */
+struct config6;
+void saveConfig6Bytes(const config6 &page6, const byte *pFirst, uint8_t length);
+
 /** @brief PID gain adaptation multiplier of the idle loop (%). Survives power cycles. */
 uint8_t loadPidAdaptIdle(void);
 /** @copydoc loadPidAdaptIdle */

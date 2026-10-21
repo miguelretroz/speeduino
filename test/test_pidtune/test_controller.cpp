@@ -2,6 +2,10 @@
 #include "../test_utils.h"
 #include "pidtune_fixture.h"
 #include "src/controllers/tsCommand/tsCommandController.h"
+#include "storage.h"
+#include "pages.h"
+
+extern uint16_t getEntityStartAddress(page_iterator_t entity);
 
 using namespace pidTune;
 using namespace pidTuneController::details;
@@ -274,6 +278,53 @@ static void test_apply_refused_after_a_mode_change(void)
     TEST_ASSERT_FALSE(pidTuneState.isUiRefresh);
 }
 
+// A result for a stepper doesn't fit a PWM valve: the units are different
+static void test_apply_refused_for_another_valve(void)
+{
+    run_idle_tune_to_done();
+    configPage6.idleKP = 50U;
+    configPage6.iacAlgorithm = IAC_ALGORITHM_PWM_OLCL;
+
+    (void)send_command(TS_CMD_PIDTUNE_APPLY, TEST_START_MS);
+
+    TEST_ASSERT_EQUAL_UINT8(50U, configPage6.idleKP);
+    assert_failed(TuneFail::WrongMode);
+}
+
+static uint16_t writeAddresses[8];
+static uint8_t writeCount;
+static byte erasedRead(uint16_t address) { (void)address; return 0xFFU; }
+static void recordWrite(uint16_t address, byte value)
+{
+    (void)value;
+    if (writeCount < _countof(writeAddresses)) { writeAddresses[writeCount] = address; }
+    ++writeCount;
+}
+static uint16_t storageLength(void) { return 4096U; }
+static uint16_t unlimitedWrites(const statuses &current) { (void)current; return UINT16_MAX; }
+
+// Apply burns the 3 gains only: the rest of page 6 may have changes not burned yet, and a burn of another page may be pending
+static void test_apply_burns_only_the_gains(void)
+{
+    run_idle_tune_to_done();
+    setEepromWritePending(true);
+    const storage_api_t original = getStorageAPI();
+    setStorageAPI({ .read = erasedRead, .write = recordWrite, .length = storageLength, .getMaxWriteBlockSize = unlimitedWrites });
+    writeCount = 0U;
+
+    (void)send_command(TS_CMD_PIDTUNE_APPLY, TEST_START_MS);
+
+    setStorageAPI(original);
+    const uint16_t gainsAddress = getEntityStartAddress(page_begin(afrSetPage)) + (uint16_t)(&configPage6.idleKP - (const byte*)&configPage6);
+    TEST_ASSERT_EQUAL_UINT8(3U, writeCount);
+    TEST_ASSERT_EQUAL_UINT16(gainsAddress, writeAddresses[0]);
+    TEST_ASSERT_EQUAL_UINT16(gainsAddress + 1U, writeAddresses[1]);
+    TEST_ASSERT_EQUAL_UINT16(gainsAddress + 2U, writeAddresses[2]);
+    // The other burn carries on
+    TEST_ASSERT_TRUE(isEepromWritePending());
+    setEepromWritePending(false);
+}
+
 // The measurements are kept: choosing another rule after the test gives its values straight away
 static void test_rule_change_after_the_test(void)
 {
@@ -471,6 +522,8 @@ void testPidTuneController(void)
     RUN_TEST_P(test_abort_command);
     RUN_TEST_P(test_apply_idle_result);
     RUN_TEST_P(test_apply_refused_after_a_mode_change);
+    RUN_TEST_P(test_apply_refused_for_another_valve);
+    RUN_TEST_P(test_apply_burns_only_the_gains);
     RUN_TEST_P(test_rule_change_after_the_test);
     RUN_TEST_P(test_apply_needs_a_result);
     RUN_TEST_P(test_idle_gains_are_the_config_bytes);

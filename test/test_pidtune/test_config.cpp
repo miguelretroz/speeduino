@@ -137,6 +137,15 @@ static void test_pidtune_ini_bits(void)
     TEST_ASSERT_EQUAL_HEX8(0x0FU, *pBits);
 }
 
+// The auto tune burns P, I and D together, as 3 bytes in a row
+static void test_pid_gains_are_together(void)
+{
+    TEST_ASSERT_EQUAL_PTR(&configPage6.idleKP + 1, &configPage6.idleKI);
+    TEST_ASSERT_EQUAL_PTR(&configPage6.idleKP + 2, &configPage6.idleKD);
+    TEST_ASSERT_EQUAL_PTR(&configPage6.egoKP + 1, &configPage6.egoKI);
+    TEST_ASSERT_EQUAL_PTR(&configPage6.egoKP + 2, &configPage6.egoKD);
+}
+
 void testPidTuneConfig(void)
 {
   SET_UNITY_FILENAME() {
@@ -145,5 +154,6 @@ void testPidTuneConfig(void)
     RUN_TEST_P(test_v4_unchanged);
     RUN_TEST_P(test_pidtune_ini_offsets);
     RUN_TEST_P(test_pidtune_ini_bits);
+    RUN_TEST_P(test_pid_gains_are_together);
   }
 }

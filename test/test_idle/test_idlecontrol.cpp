@@ -966,6 +966,47 @@ static void test_stepOpenLoopClosedLoopAutoTuneDrivesTheValve(void)
   TEST_ASSERT_EQUAL_INT(100, _idleState.idleStepper.targetIdleStep);
 }
 
+// Stepper closed loop works on the change of the output (the feed forward is the previous output): after the test
+// the valve must stay where the test started, through the 10Hz feed forward update and the throttle freeze
+static void test_stepClosedLoopAutoTuneHandBack(void)
+{
+  context_t context;
+  prepare_stepClosedLoop(context, IAC_ALGORITHM_STEP_CL);
+  pidTuneController::details::setDefaults(context.page15);
+  initialisePidTune(context.page6, context.page15);
+  context.page6.idleKP = 4U;
+  context.page6.idleKD = 32U;
+  context.page2.iacTPSlimit = 10U;
+  context.current.TPS = 0U;
+  context.current.RPM = 900U;
+  context.current.CLIdleTarget = 90U;
+  _idleState.idle_cl_target_rpm = 900;
+  context.current.LOOP_TIMER = (1U << BIT_TIMER_10HZ);
+  context.current.rotationStatus = EngineRotationStatus::Running;
+  _idleState.idle_pid_target_value = 400;
+  _idleState.FeedForwardTerm = 400;
+
+  TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_IDLE_START, context.current, context.page6, context.page15));
+  idleControl();
+  // As if the relay had moved the valve up
+  _idleState.idle_pid_target_value = 432;
+  _idleState.FeedForwardTerm = 432;
+
+  TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_ABORT, context.current, context.page6, context.page15));
+  TEST_ASSERT_EQUAL_INT(400, _idleState.idle_pid_target_value);
+  TEST_ASSERT_EQUAL_INT(400, _idleState.FeedForwardTerm);
+
+  // On target: the PID keeps the valve there
+  idleControl();
+  TEST_ASSERT_EQUAL_INT(400, _idleState.idle_pid_target_value);
+  TEST_ASSERT_EQUAL_INT(100, _idleState.idleStepper.targetIdleStep);
+
+  // Throttle open: frozen at the same place
+  context.current.TPS = 20U;
+  idleControl();
+  TEST_ASSERT_EQUAL_INT(100, _idleState.idleStepper.targetIdleStep);
+}
+
 static void test_pwmClosedLoopAutoTuneDrivesTheValve(void)
 {
   context_t context;
@@ -1067,5 +1108,6 @@ void testIdleControl(void)
   RUN_TEST_P(test_stepperModeDisablesIdle);
   RUN_TEST_P(test_stepOpenLoopClosedLoopAutoTuneDrivesTheValve);
   RUN_TEST_P(test_pwmClosedLoopAutoTuneDrivesTheValve);
+  RUN_TEST_P(test_stepClosedLoopAutoTuneHandBack);
   RUN_TEST_P(test_pwmClosedLoopFeedsTheGainAdaptation);
 }

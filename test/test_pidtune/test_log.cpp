@@ -58,14 +58,20 @@ static void test_log_page_reload_request(void)
 {
     run_idle_tune_to_done();
     (void)send_command(TS_CMD_PIDTUNE_APPLY, TEST_START_MS);
-
-    // A packet that didn't include byte 142 (E.g. the first part of a split read)
-    pidTuneAckUiRefresh();
     TEST_ASSERT_BITS_HIGH(0x10U, logByte(0U));
     TEST_ASSERT_BITS_HIGH(0x40U, logByte(0U)); // Applied
 
-    // Once sent, the request is cleared
-    pidTuneAckUiRefresh();
+    // Reading it isn't sending it (E.g. another user of the log)
+    TEST_ASSERT_BITS_HIGH(0x10U, logByte(0U));
+
+    // The first part of a split read doesn't carry it
+    pidTuneAckUiRefresh(0U, 121U);
+    TEST_ASSERT_BITS_HIGH(0x10U, logByte(0U));
+    pidTuneAckUiRefresh(143U, 14U);
+    TEST_ASSERT_BITS_HIGH(0x10U, logByte(0U));
+
+    // The part that carries it: cleared
+    pidTuneAckUiRefresh(121U, 36U);
     TEST_ASSERT_BITS_LOW(0x10U, logByte(0U));
     TEST_ASSERT_BITS_HIGH(0x40U, logByte(0U));
 }
