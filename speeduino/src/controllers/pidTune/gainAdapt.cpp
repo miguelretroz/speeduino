@@ -38,18 +38,18 @@ bool GainAdapter::sample(int16_t error, bool isSteady, uint32_t nowMs, const gai
     _isWindowRunning = false;
     return false;
   }
-  if (!_isWindowRunning) { startWindow(nowMs); }
+  if (!_isWindowRunning) { startWindow(error, nowMs); }
 
-  const uint16_t absError = (error < 0) ? (uint16_t)(-(int32_t)error) : (uint16_t)error;
-  if (absError < _minError) { _minError = absError; }
-  if (absError > _maxError) { _maxError = absError; }
+  _filteredError += (((int32_t)error * 16L) - _filteredError) / FILTER_DIVIDER;
+  const int32_t filtered = _filteredError / 16L;
+  _absErrorSum += (uint32_t)((filtered < 0) ? -filtered : filtered);
   if (_samples < UINT16_MAX) { ++_samples; }
 
-  // Crossings are counted from one side of the band to the other, so noise inside the band doesn't count
+  // Crossings are counted from one side of the band to the other, so small swings inside the band don't count
   const uint16_t band = (config.band == 0U) ? 1U : config.band;
   int8_t side = 0;
-  if (error > (int32_t)band) { side = 1; }
-  else if (error < -(int32_t)band) { side = -1; }
+  if (filtered > (int32_t)band) { side = 1; }
+  else if (filtered < -(int32_t)band) { side = -1; }
   else { /* Inside the band */ }
   if (side != 0)
   {
@@ -77,7 +77,7 @@ bool GainAdapter::sample(int16_t error, bool isSteady, uint32_t nowMs, const gai
     }
     isChanged = (decision == AdaptDecision::Lower) || (decision == AdaptDecision::Raise);
     if (decision != AdaptDecision::None) { _lastDecision = decision; }
-    startWindow(nowMs);
+    startWindow(error, nowMs);
   }
   return isChanged;
 }
@@ -91,23 +91,24 @@ PidTuningParameters GainAdapter::apply(const PidTuningParameters &gains) const
   return scaled;
 }
 
-void GainAdapter::startWindow(uint32_t nowMs)
+void GainAdapter::startWindow(int16_t error, uint32_t nowMs)
 {
   _isWindowRunning = true;
   _windowStartMs = nowMs;
   _lastSide = 0;
   _crossings = 0U;
   _samples = 0U;
-  _minError = UINT16_MAX;
-  _maxError = 0U;
+  _filteredError = (int32_t)error * 16L;
+  _absErrorSum = 0U;
 }
 
 AdaptDecision GainAdapter::decide(const gainAdaptConfig_t &config) const
 {
   const uint16_t band = (config.band == 0U) ? 1U : config.band;
   if (_samples < MIN_WINDOW_SAMPLES) { return AdaptDecision::None; }
-  if ((_crossings >= OSCILLATION_CROSSINGS) && (_maxError >= (2U * band))) { return AdaptDecision::Lower; }
-  if ((_crossings == 0U) && (_minError >= band)) { return AdaptDecision::Raise; }
+  if (_crossings >= OSCILLATION_CROSSINGS) { return AdaptDecision::Lower; }
+  // Off target on average, on one side
+  if ((_crossings == 0U) && (_absErrorSum >= ((uint32_t)band * _samples))) { return AdaptDecision::Raise; }
   return AdaptDecision::Hold;
 }
 

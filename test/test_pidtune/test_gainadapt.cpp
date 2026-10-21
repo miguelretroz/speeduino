@@ -32,6 +32,7 @@ static int16_t oscillating(uint32_t index) { return ((index / 4U) % 2U == 0U) ? 
 static int16_t offTarget(uint32_t index) { (void)index; return 20; }
 static int16_t onTarget(uint32_t index) { return (index % 2U == 0U) ? 5 : -5; }
 static int16_t oneCrossing(uint32_t index) { return (index < 30U) ? 20 : -20; }
+static int16_t noise(uint32_t index) { return (index % 2U == 0U) ? 30 : -30; } // Past the band on every sample
 
 static void test_adapt_starts_at_100(void)
 {
@@ -67,6 +68,15 @@ static void test_adapt_holds_on_target(void)
 
     // One crossing: settling, not oscillating
     (void)runWindow(adapter, 20000UL, oneCrossing);
+    TEST_ASSERT_EQUAL_UINT8(100U, adapter.getMultiplier());
+    TEST_ASSERT_EQUAL(AdaptDecision::Hold, adapter.getLastDecision());
+}
+
+static void test_adapt_ignores_noise(void)
+{
+    // Fast noise is filtered out: it doesn't look like an oscillation
+    GainAdapter adapter;
+    (void)runWindow(adapter, 0U, noise);
     TEST_ASSERT_EQUAL_UINT8(100U, adapter.getMultiplier());
     TEST_ASSERT_EQUAL(AdaptDecision::Hold, adapter.getLastDecision());
 }
@@ -177,6 +187,7 @@ void testGainAdapter(void)
     RUN_TEST_P(test_adapt_lowers_when_oscillating);
     RUN_TEST_P(test_adapt_raises_when_off_target);
     RUN_TEST_P(test_adapt_holds_on_target);
+    RUN_TEST_P(test_adapt_ignores_noise);
     RUN_TEST_P(test_adapt_reports_a_change);
     RUN_TEST_P(test_adapt_limits);
     RUN_TEST_P(test_adapt_unsteady_restarts_the_window);
