@@ -66,6 +66,12 @@ static uint16_t absDifference(uint16_t a, uint16_t b)
   return (a > b) ? (a - b) : (b - a);
 }
 
+/** @brief The throttle is closed, as far as the idle loop is concerned */
+static bool isThrottleClosed(const statuses &current, const config2 &page2)
+{
+  return (current.TPS <= IDLE_MAX_TPS) && (current.TPS <= page2.iacTPSlimit);
+}
+
 /** @brief Work out the suggested bytes from the measured ultimate point */
 static void computeResult(const config15 &page15)
 {
@@ -132,7 +138,7 @@ static TuneFail startIdleTune(const statuses &current, const config2 &page2, con
   if (!isIdleClosedLoop(page6.iacAlgorithm)) { return TuneFail::WrongMode; }
 
   const idleTuneInfo_t idle = getIdleTuneInfo();
-  if (!idle.isReady || (current.TPS > page2.iacTPSlimit) || current.isDFCOActive || (current.RPM < IDLE_MIN_RPM)) { return TuneFail::NotReady; }
+  if (!idle.isReady || !isThrottleClosed(current, page2) || current.isDFCOActive || (current.RPM < IDLE_MIN_RPM)) { return TuneFail::NotReady; }
   // The stepper stops short of its target by the hysteresis, so smaller moves barely reach the engine
   if (idle.isStepper && (page15.pidTuneIdleAmplitude <= (2U * page6.iacStepHyster))) { return TuneFail::AmplitudeBelowHysteresis; }
 
@@ -185,7 +191,7 @@ static TuneFail checkIdleConditions(const statuses &current, const config2 &page
 {
   if (page6.iacAlgorithm != pidTuneState.iacAlgorithm) { return TuneFail::WrongMode; }
   if ((current.rotationStatus != EngineRotationStatus::Running) || !getIdleTuneInfo().isReady) { return TuneFail::ConditionLost; }
-  if ((current.TPS > page2.iacTPSlimit) || current.isDFCOActive || (current.RPM < IDLE_MIN_RPM)) { return TuneFail::ConditionLost; }
+  if (!isThrottleClosed(current, page2) || current.isDFCOActive || (current.RPM < IDLE_MIN_RPM)) { return TuneFail::ConditionLost; }
   // A load switching on or off would show up as a change of the loop
   if ((isAirConOn(current) != pidTuneState.wasAirConOn) || (current.idleUpActive != pidTuneState.wasIdleUpOn) || ((current.fanDuty > 0U) != pidTuneState.wasFanOn))
   {
@@ -427,7 +433,7 @@ void pidTuneIdleAdaptSample(const statuses &current, int16_t error, int32_t outp
   // A load switching on or off disturbs the loop. At the output limits the loop can't do more, whatever the gains.
   const bool isSteady = idle.isReady
                      && !pidTuneState.tuner.isRunning()
-                     && (current.TPS <= configPage2.iacTPSlimit)
+                     && isThrottleClosed(current, configPage2)
                      && !current.isDFCOActive
                      && (loads == pidTuneState.idleAdaptLoads)
                      && (output > idle.outputMin)

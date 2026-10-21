@@ -71,6 +71,11 @@ static void test_adapt_idle_needs_steady_conditions(void)
     currentStatus.TPS = configPage2.iacTPSlimit + 1U;
     pidTuneIdleAdaptSample(currentStatus, 10, IDLE_BASE, TEST_START_MS + SAMPLE_MS);
     TEST_ASSERT_FALSE(pidTuneState.idleAdapt.adapter.isWindowRunning());
+    // Even with the integral reset TPS at 100%
+    configPage2.iacTPSlimit = 200U;
+    currentStatus.TPS = IDLE_MAX_TPS + 1U;
+    pidTuneIdleAdaptSample(currentStatus, 10, IDLE_BASE, TEST_START_MS + SAMPLE_MS);
+    TEST_ASSERT_FALSE(pidTuneState.idleAdapt.adapter.isWindowRunning());
     currentStatus.TPS = 0U;
 
     // Output at its limit: the loop can't do more, whatever the gains

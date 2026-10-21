@@ -58,6 +58,24 @@ static void test_idle_start_refused_with_throttle_open(void)
     assert_failed(TuneFail::NotReady);
 }
 
+static void test_idle_throttle_closed_even_with_a_high_reset_tps(void)
+{
+    // The idle integral reset TPS can be set as high as 100%: the tune still needs the throttle closed
+    setup_idle_tune();
+    configPage2.iacTPSlimit = 200U;
+    currentStatus.TPS = IDLE_MAX_TPS + 1U;
+    (void)send_command(TS_CMD_PIDTUNE_IDLE_START, TEST_START_MS);
+    assert_failed(TuneFail::NotReady);
+
+    setup_idle_tune();
+    configPage2.iacTPSlimit = 200U;
+    (void)send_command(TS_CMD_PIDTUNE_IDLE_START, TEST_START_MS);
+    TEST_ASSERT_TRUE(isPidTuneIdleRunning());
+    currentStatus.TPS = IDLE_MAX_TPS + 1U;
+    run_control(TEST_START_MS + 100U);
+    assert_failed(TuneFail::ConditionLost);
+}
+
 static void test_idle_start_refused_below_step_hysteresis(void)
 {
     setup_idle_tune();
@@ -413,6 +431,7 @@ void testPidTuneController(void)
     RUN_TEST_P(test_idle_start_refused_in_open_loop);
     RUN_TEST_P(test_idle_start_refused_while_tapering);
     RUN_TEST_P(test_idle_start_refused_with_throttle_open);
+    RUN_TEST_P(test_idle_throttle_closed_even_with_a_high_reset_tps);
     RUN_TEST_P(test_idle_start_refused_below_step_hysteresis);
     RUN_TEST_P(test_idle_start_refused_without_authority);
     RUN_TEST_P(test_idle_start);

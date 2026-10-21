@@ -18,6 +18,8 @@ namespace details {
   constexpr uint16_t IDLE_MAX_EXCURSION = 300U;
   /** @brief Idle: abort below this RPM, the engine is about to stall */
   constexpr uint16_t IDLE_MIN_RPM = 400U;
+  /** @brief Idle: throttle closed. The idle integral reset TPS is used too, when lower (it can be set as high as 100%). (Unit: 0.5%) */
+  constexpr uint8_t IDLE_MAX_TPS = 6U;
   /** @brief AFR: fail if the relay doesn't switch within this time */
   constexpr uint16_t EGO_NO_SWITCH_MS = 10000U;
   /** @brief AFR: fail if the AFR gets this far from the setpoint (Unit: 0.1 AFR) */
