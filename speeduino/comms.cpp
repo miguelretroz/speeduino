@@ -14,6 +14,7 @@ A full copy of the license may be found in the projects root directory
 #include "maths.h"
 #include "decoders.h"
 #include "src/controllers/tsCommand/tsCommandController.h"
+#include "src/controllers/pidTune/pidTuneController.h"
 #include "pages.h"
 #include "page_crc.h"
 #include "logger.h"
@@ -391,6 +392,7 @@ static void generateLiveValues(uint16_t offset, uint16_t packetLength)
   }
   // Reset any flags that are being used to trigger page refreshes
   currentStatus.vssUiRefresh = false;
+  pidTuneAckUiRefresh(); // Fork
 }
 
 // Abstract the FastCrC32 functions 
@@ -660,7 +662,11 @@ void processSerialCommand(void)
     }
 
     case 'E': // receive command button commands
-      (void)handleTsCommand(word(serialPayload[1], serialPayload[2]), currentStatus, configPage2);
+      // Fork: the PID auto tune commands (group 0x40) first
+      if (!handlePidTuneCommand(word(serialPayload[1], serialPayload[2]), currentStatus, configPage6, configPage15))
+      {
+        (void)handleTsCommand(word(serialPayload[1], serialPayload[2]), currentStatus, configPage2);
+      }
       sendReturnCodeMsg(SERIAL_RC_OK);
       break;
 

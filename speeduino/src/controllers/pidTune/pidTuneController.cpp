@@ -232,6 +232,7 @@ static void applyResult(config6 &page6)
     savePage(afrSetPage);
     pidTuneState.isApplied = true;
     pidTuneState.isUiRefresh = true;
+    pidTuneState.isUiRefreshSent = false;
   }
 }
 
@@ -336,6 +337,56 @@ bool pidTuneEgoTakeBumpless(void)
   const bool isBumpless = pidTuneState.isEgoBumpless;
   pidTuneState.isEgoBumpless = false;
   return isBumpless;
+}
+
+static uint8_t getStatusByte(void)
+{
+  static_assert((uint8_t)TunePhase::Failed <= 0x07U, "Phase does not fit in 3 bits");
+  uint8_t status = (uint8_t)pidTuneState.tuner.getPhase();
+  if (pidTuneState.loop == TuneLoop::Ego) { status |= (1U << 3U); }
+  if (pidTuneState.isUiRefresh)
+  {
+    status |= (1U << 4U);
+    pidTuneState.isUiRefreshSent = true;
+  }
+  if (pidTuneState.result.saturated) { status |= (1U << 5U); }
+  if (pidTuneState.isApplied) { status |= (1U << 6U); }
+  if (pidTuneState.result.quantised) { status |= (1U << 7U); }
+  return status;
+}
+
+uint8_t getPidTuneLogByte(uint8_t index)
+{
+  uint8_t value = 0U;
+  switch (index)
+  {
+    case 0U: value = getStatusByte(); break;
+    case 1U: value = (uint8_t)pidTuneState.tuner.getFailure(); break;
+    case 2U: value = pidTuneState.result.kp; break;
+    case 3U: value = pidTuneState.result.ki; break;
+    case 4U: value = pidTuneState.result.kd; break;
+    case 5U: value = lowByte(pidTuneState.tuner.getPeriodMs()); break;
+    case 6U: value = highByte(pidTuneState.tuner.getPeriodMs()); break;
+    case 7U: value = lowByte(pidTuneState.tuner.getAmplitude()); break;
+    case 8U: value = highByte(pidTuneState.tuner.getAmplitude()); break;
+    case 9U: value = lowByte(pidTuneState.ultimateGainQ8); break;
+    case 10U: value = highByte(pidTuneState.ultimateGainQ8); break;
+    case 11U: value = pidTuneState.tuner.getCycles(); break;
+    case 12U: value = ONE_HUNDRED_PCT; break; // Gain adaptation, idle
+    case 13U: value = ONE_HUNDRED_PCT; break; // Gain adaptation, AFR
+    default: value = 0U; break;
+  }
+  return value;
+}
+
+void pidTuneAckUiRefresh(void)
+{
+  // Only once the request has gone out: TunerStudio may read the live data in several parts
+  if (pidTuneState.isUiRefreshSent)
+  {
+    pidTuneState.isUiRefresh = false;
+    pidTuneState.isUiRefreshSent = false;
+  }
 }
 
 // LCOV_EXCL_START

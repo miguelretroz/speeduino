@@ -46,6 +46,7 @@ namespace details {
     bool isActive = false;             ///< A test is running, or stopped and not handed back to the PID yet
     bool isApplied = false;            ///< The result was written to the tune
     bool isUiRefresh = false;          ///< Ask TunerStudio to reload page 6
+    bool isUiRefreshSent = false;      ///< The reload request was in the live data sent last
     bool isVelocityForm = false;       ///< Idle: stepper closed loop when the test started
     bool isIdleBumpless = false;       ///< The next idle gain change must not make the output jump
     bool isEgoBumpless = false;        ///< The next AFR gain change must not make the output jump

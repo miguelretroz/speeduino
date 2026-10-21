@@ -33,3 +33,13 @@ bool send_command(uint16_t command, uint32_t nowMs);
 
 /** @brief Run the 10Hz checks */
 void run_control(uint32_t nowMs);
+
+/** @brief RPM triangle wave for the idle relay: 12 samples per cycle (3S), +/-40 RPM */
+constexpr uint8_t IDLE_TRIANGLE_SAMPLES = 12U;
+extern const int8_t IDLE_TRIANGLE[IDLE_TRIANGLE_SAMPLES];
+
+/** @brief Hold the RPM while the idle relay settles, at its own rate. Returns the time of the last sample. */
+uint32_t settle_idle(uint32_t nowMs);
+
+/** @brief Run an idle auto tune on the triangle wave until it's done: Ku 1.02 (Q8 260), Tu 3S, bytes 10/2/0 */
+void run_idle_tune_to_done(void);

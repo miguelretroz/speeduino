@@ -75,3 +75,26 @@ PidTuningParameters pidTuneEgoGains(const config6 &page6);
 /** @brief True (once) when the next AFR gain change must not make the output jump */
 bool pidTuneEgoTakeBumpless(void);
 ///@}
+
+/** @name Live data (bytes 142 to 156 of the realtime data) */
+///@{
+/** @brief Number of live data bytes */
+constexpr uint8_t PIDTUNE_LOG_BYTES = 15U;
+
+/**
+ * @brief One live data byte, index 0 being byte 142
+ *
+ * - 0: status. Bits 0-2: phase (0 idle, 1 settle, 2 relay, 3 done, 4 failed). Bit 3: loop (0 idle, 1 AFR).
+ *   Bit 4: TunerStudio must reload page 6. Bit 5: gain limited. Bit 6: applied. Bit 7: a byte was rounded up to 1.
+ * - 1: failure (pidTune::TuneFail)
+ * - 2, 3, 4: suggested P, I and D bytes
+ * - 5-6: ultimate period (mS). 7-8: oscillation amplitude (RPM or 0.1 AFR). 9-10: ultimate gain (Q8)
+ * - 11: cycles measured
+ * - 12, 13: gain adaptation multipliers, idle and AFR (%)
+ * - 14: gain adaptation status. Bits 0, 1: idle, AFR loop steady. Bits 2-4, 5-7: last decision, idle and AFR
+ */
+uint8_t getPidTuneLogByte(uint8_t index);
+
+/** @brief Call once the live data has been sent: the page reload request is cleared once it's been seen */
+void pidTuneAckUiRefresh(void);
+///@}

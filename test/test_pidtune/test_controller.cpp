@@ -8,25 +8,10 @@ using namespace pidTuneController::details;
 
 static constexpr uint32_t STEP_MS = IDLE_SAMPLE_MS;
 
-// A triangle wave: 12 samples per cycle, +/-40 around the setpoint
-static constexpr int8_t TRIANGLE[] = { 0, 13, 27, 40, 27, 13, 0, -13, -27, -40, -27, -13 };
-
 static void assert_failed(TuneFail reason)
 {
     TEST_ASSERT_EQUAL(TunePhase::Failed, pidTuneState.tuner.getPhase());
     TEST_ASSERT_EQUAL(reason, pidTuneState.tuner.getFailure());
-}
-
-/** @brief Run the idle relay at its own rate, holding the RPM, until it leaves the settle phase. Returns the time. */
-static uint32_t settle_idle(uint32_t nowMs)
-{
-    int32_t output = IDLE_BASE;
-    while (pidTuneState.tuner.getPhase() == TunePhase::Settle)
-    {
-        TEST_ASSERT_TRUE(pidTuneIdleRelayStep(nowMs, IDLE_RPM, output, output));
-        nowMs += STEP_MS;
-    }
-    return nowMs - STEP_MS;
 }
 
 // ---------------------------------------------------------------- Idle
@@ -140,7 +125,7 @@ static void test_idle_tune_done(void)
     for (uint8_t index = 1U; isPidTuneIdleRunning() && (index < 100U); ++index)
     {
         nowMs += STEP_MS;
-        TEST_ASSERT_TRUE(pidTuneIdleRelayStep(nowMs, IDLE_RPM + TRIANGLE[index % _countof(TRIANGLE)], output, output));
+        TEST_ASSERT_TRUE(pidTuneIdleRelayStep(nowMs, IDLE_RPM + IDLE_TRIANGLE[index % IDLE_TRIANGLE_SAMPLES], output, output));
     }
 
     TEST_ASSERT_EQUAL(TunePhase::Done, pidTuneState.tuner.getPhase());
@@ -231,20 +216,6 @@ static void test_abort_command(void)
 
     assert_failed(TuneFail::Aborted);
     TEST_ASSERT_EQUAL(IDLE_BASE, _idleState.idle_pid_target_value);
-}
-
-static void run_idle_tune_to_done(void)
-{
-    setup_idle_tune();
-    (void)send_command(TS_CMD_PIDTUNE_IDLE_START, TEST_START_MS);
-    uint32_t nowMs = settle_idle(TEST_START_MS);
-    int32_t output = pidTuneState.tuner.getOutput();
-    for (uint8_t index = 1U; isPidTuneIdleRunning() && (index < 100U); ++index)
-    {
-        nowMs += STEP_MS;
-        (void)pidTuneIdleRelayStep(nowMs, IDLE_RPM + TRIANGLE[index % _countof(TRIANGLE)], output, output);
-    }
-    TEST_ASSERT_EQUAL(TunePhase::Done, pidTuneState.tuner.getPhase());
 }
 
 static void test_apply_idle_result(void)

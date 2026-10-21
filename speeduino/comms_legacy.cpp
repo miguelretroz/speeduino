@@ -15,6 +15,7 @@ A full copy of the license may be found in the projects root directory
 #include "preprocessor.h"
 #include "decoders.h"
 #include "src/controllers/tsCommand/tsCommandController.h"
+#include "src/controllers/pidTune/pidTuneController.h"
 #include "pages.h"
 #include "page_crc.h"
 #include "logger.h"
@@ -134,7 +135,12 @@ void legacySerialCommand(void)
       if(primarySerial.available() >= 2)
       {
         byte cmdGroup = (byte)Serial.read();
-        (void)handleTsCommand(word(cmdGroup, primarySerial.read()), currentStatus, configPage2);
+        const uint16_t command = word(cmdGroup, primarySerial.read());
+        // Fork: the PID auto tune commands (group 0x40) first
+        if (!handlePidTuneCommand(command, currentStatus, configPage6, configPage15))
+        {
+          (void)handleTsCommand(command, currentStatus, configPage2);
+        }
         serialStatusFlag = SERIAL_INACTIVE;
       }
       break;
@@ -759,6 +765,7 @@ void sendValues(uint16_t offset, uint16_t packetLength, byte cmd, Stream &target
   while(targetPort.available()>0) { targetPort.read(); }
   // Reset any flags that are being used to trigger page refreshes
   currentStatus.vssUiRefresh = false;
+  pidTuneAckUiRefresh(); // Fork
 }
 
 void sendValuesLegacy(void)

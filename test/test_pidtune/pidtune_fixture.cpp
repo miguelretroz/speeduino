@@ -1,3 +1,4 @@
+#include <unity.h>
 #include "pidtune_fixture.h"
 #include "corrections.h"
 #include "units.h"
@@ -91,4 +92,31 @@ bool send_command(uint16_t command, uint32_t nowMs)
 void run_control(uint32_t nowMs)
 {
     pidTuneControlCore(currentStatus, configPage2, configPage6, configPage15, nowMs);
+}
+
+const int8_t IDLE_TRIANGLE[IDLE_TRIANGLE_SAMPLES] = { 0, 13, 27, 40, 27, 13, 0, -13, -27, -40, -27, -13 };
+
+uint32_t settle_idle(uint32_t nowMs)
+{
+    int32_t output = IDLE_BASE;
+    while (pidTuneState.tuner.getPhase() == pidTune::TunePhase::Settle)
+    {
+        TEST_ASSERT_TRUE(pidTuneIdleRelayStep(nowMs, IDLE_RPM, output, output));
+        nowMs += pidTuneController::details::IDLE_SAMPLE_MS;
+    }
+    return nowMs - pidTuneController::details::IDLE_SAMPLE_MS;
+}
+
+void run_idle_tune_to_done(void)
+{
+    setup_idle_tune();
+    (void)send_command(TS_CMD_PIDTUNE_IDLE_START, TEST_START_MS);
+    uint32_t nowMs = settle_idle(TEST_START_MS);
+    int32_t output = pidTuneState.tuner.getOutput();
+    for (uint8_t index = 1U; isPidTuneIdleRunning() && (index < 100U); ++index)
+    {
+        nowMs += pidTuneController::details::IDLE_SAMPLE_MS;
+        (void)pidTuneIdleRelayStep(nowMs, IDLE_RPM + IDLE_TRIANGLE[index % IDLE_TRIANGLE_SAMPLES], output, output);
+    }
+    TEST_ASSERT_EQUAL(pidTune::TunePhase::Done, pidTuneState.tuner.getPhase());
 }

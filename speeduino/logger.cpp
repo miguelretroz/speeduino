@@ -13,6 +13,7 @@
 #include "src/controllers/progammableIO/programmableIOControl.h"
 #include "src/controllers/coldStart/coldStartController.h"
 #include "src/controllers/oilTemp/oilTempController.h"
+#include "src/controllers/pidTune/pidTuneController.h"
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
 {
@@ -368,6 +369,22 @@ byte getTSLogEntry(uint16_t byteNum)
     case 139: statusValue = getColdStartLogStatus(); break; // Fork specific
     case 140: statusValue = getOilTempLogValue(); break; // Fork specific
     case 141: statusValue = getOilTempLogStatus(); break; // Fork specific
+    // Fork specific: PID auto tune
+    case 142: statusValue = getPidTuneLogByte(0U); break;
+    case 143: statusValue = getPidTuneLogByte(1U); break;
+    case 144: statusValue = getPidTuneLogByte(2U); break;
+    case 145: statusValue = getPidTuneLogByte(3U); break;
+    case 146: statusValue = getPidTuneLogByte(4U); break;
+    case 147: statusValue = getPidTuneLogByte(5U); break;
+    case 148: statusValue = getPidTuneLogByte(6U); break;
+    case 149: statusValue = getPidTuneLogByte(7U); break;
+    case 150: statusValue = getPidTuneLogByte(8U); break;
+    case 151: statusValue = getPidTuneLogByte(9U); break;
+    case 152: statusValue = getPidTuneLogByte(10U); break;
+    case 153: statusValue = getPidTuneLogByte(11U); break;
+    case 154: statusValue = getPidTuneLogByte(12U); break;
+    case 155: statusValue = getPidTuneLogByte(13U); break;
+    case 156: statusValue = getPidTuneLogByte(14U); break;
     default: statusValue = 0; // MISRA check
   }
 

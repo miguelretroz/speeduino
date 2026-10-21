@@ -7,11 +7,13 @@ void runAllTests(void)
     extern void testPidTuneRules(void);
     extern void testPidTuneConfig(void);
     extern void testPidTuneController(void);
+    extern void testPidTuneLog(void);
 
     testRelayTuner();
     testPidTuneRules();
     testPidTuneConfig();
     testPidTuneController();
+    testPidTuneLog();
 }
 
 TEST_HARNESS(runAllTests)
