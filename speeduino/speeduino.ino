@@ -63,6 +63,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "src/controllers/nitrous/nitrousController.h"
 #include "src/controllers/auxChannels/auxChannelController.h"
 #include "src/controllers/coldStart/coldStartController.h"
+#include "src/controllers/pidTune/pidTuneController.h"
 
 #define CRANK_RUN_HYSTER    15
 
@@ -298,6 +299,9 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
     if(BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_10HZ)) //10 hertz
     {
       programmableIOControl(configPage13);
+
+      // Fork: PID auto tune conditions and timeouts. Runs before the idle control below, in the same loop.
+      pidTuneControl(currentStatus, configPage2, configPage6, configPage15);
       
       // Air conditioning control
       airConControl(currentStatus, configPage15);

@@ -4,6 +4,8 @@
 #include "maths.h"
 #include "units.h"
 #include "context.h"
+#include "src/controllers/pidTune/pidTuneController.h"
+#include "src/controllers/pidTune/pidTuneController_details.h"
 
 extern idleController::detail::state_t _idleState;
 extern idleController::detail::fnCurMicros_t _idleCurMicros;
@@ -931,6 +933,68 @@ static void test_stepperModeDisablesIdle(void)
   TEST_ASSERT_FALSE(context.current.idleOn);
   TEST_ASSERT_EQUAL_UINT8(0U, context.current.idleLoad);
 }
+// Fork: while the PID auto tune runs, its relay drives the valve instead of the PID
+static void test_stepOpenLoopClosedLoopAutoTuneDrivesTheValve(void)
+{
+  context_t context;
+  prepare_stepClosedLoop(context, IAC_ALGORITHM_STEP_OLCL);
+  pidTuneController::details::setDefaults(context.page15);
+  initialisePidTune();
+  // The PID would move the valve away from where it is
+  context.page6.idleKP = 100U;
+  context.page2.iacTPSlimit = 10U;
+  context.current.TPS = 0U;
+  context.current.RPM = 900U;
+  context.current.LOOP_TIMER = (1U << BIT_TIMER_10HZ);
+  context.current.rotationStatus = EngineRotationStatus::Running;
+  _idleState.idle_pid_target_value = 400;
+
+  TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_IDLE_START, context.current, context.page6, context.page15));
+  TEST_ASSERT_TRUE(isPidTuneIdleRunning());
+
+  idleControl();
+
+  // Measuring the setpoint: the valve is held where it was
+  TEST_ASSERT_EQUAL_INT(400, _idleState.idle_pid_target_value);
+  TEST_ASSERT_EQUAL_INT(100, _idleState.idleStepper.targetIdleStep);
+
+  // Aborted: the PID takes over from the same position, without a jump
+  TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_ABORT, context.current, context.page6, context.page15));
+  TEST_ASSERT_FALSE(isPidTuneIdleRunning());
+  idleControl();
+  TEST_ASSERT_EQUAL_INT(400, _idleState.idle_pid_target_value);
+  TEST_ASSERT_EQUAL_INT(100, _idleState.idleStepper.targetIdleStep);
+}
+
+static void test_pwmClosedLoopAutoTuneDrivesTheValve(void)
+{
+  context_t context;
+  context.prepare_idle(IAC_ALGORITHM_PWM_CL);
+  context.page6.idleFreq = 100U;
+  context.page6.idleKP = 100U;
+  context.page2.iacTPSlimit = 10U;
+  context.current.coolant = 50;
+  context.current.TPS = 0U;
+  context.current.RPM = 900U;
+  context.current.rotationStatus = EngineRotationStatus::Running;
+  initialiseIdle(false);
+  pidTuneController::details::setDefaults(context.page15);
+  initialisePidTune();
+  // 40% duty
+  const int32_t base = (int32_t)percentage(40U, (uint32_t)_idleState.idle_pwm_max_count << 2);
+  _idleState.idle_pid_target_value = base;
+
+  TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_IDLE_START, context.current, context.page6, context.page15));
+  TEST_ASSERT_TRUE(isPidTuneIdleRunning());
+
+  idleControl();
+
+  TEST_ASSERT_EQUAL_INT(base, _idleState.idle_pid_target_value);
+  TEST_ASSERT_EQUAL_UINT32((uint32_t)base >> 2, _idleState.idle_pwm_target_value);
+
+  TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_ABORT, context.current, context.page6, context.page15));
+  TEST_ASSERT_FALSE(isPidTuneIdleRunning());
+}
 void testIdleControl(void)
 {
   unity_filename_guard_t guard(__FILE__);
@@ -974,4 +1038,6 @@ void testIdleControl(void)
   RUN_TEST_P(test_pwmOpenLoopRunningUsesRunningTable);
   RUN_TEST_P(test_pwmOpenLoopRunningTaper);
   RUN_TEST_P(test_stepperModeDisablesIdle);
+  RUN_TEST_P(test_stepOpenLoopClosedLoopAutoTuneDrivesTheValve);
+  RUN_TEST_P(test_pwmClosedLoopAutoTuneDrivesTheValve);
 }

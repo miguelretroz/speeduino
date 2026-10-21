@@ -93,6 +93,9 @@ public:
   /** @brief Stop the experiment with a failure. No effect unless it's running. */
   void abort(TuneFail reason);
 
+  /** @brief Go to Failed, running or not (E.g. to show why the experiment couldn't start) */
+  void fail(TuneFail reason);
+
   /** @brief Back to Idle, forgetting any result */
   void reset(void);
 
@@ -118,7 +121,6 @@ public:
   uint8_t getCycles(void) const { return _storedCycles; }
 
 private:
-  void fail(TuneFail reason);
   void startRelay(int16_t processValue, int32_t realizedOutput, uint32_t nowMs);
   void resetExtremes(int16_t processValue, int32_t realizedOutput);
   void trackExtremes(int16_t processValue, int32_t realizedOutput);

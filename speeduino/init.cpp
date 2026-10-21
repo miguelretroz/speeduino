@@ -40,6 +40,7 @@
 #include "src/controllers/launch/launchController.h"
 #include "src/controllers/coldStart/coldStartController.h"
 #include "src/controllers/oilTemp/oilTempController.h"
+#include "src/controllers/pidTune/pidTuneController.h"
 #include "fork_updates.h"
 
 #if defined(CORE_AVR)
@@ -190,6 +191,7 @@ void initialiseAll(void)
     initialiseNitrous();
     initialiseVvtWmi(currentStatus, pinNumbers, configPage4, configPage6, configPage10);
     initialiseCorrections();
+    initialisePidTune();
     currentStatus.ioError = false; //Clear the I/O error bit. The bit will be set in initialiseADC() if there is problem in there.
     initialiseADC();
     initialiseMAPBaro();

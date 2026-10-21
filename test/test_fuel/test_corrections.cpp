@@ -8,6 +8,8 @@
 #include "units.h"
 #include "fuel_calcs.h"
 #include "src/PID/PID.h"
+#include "src/controllers/pidTune/pidTuneController.h"
+#include "src/controllers/pidTune/pidTuneController_details.h"
 
 extern byte correctionWUE(void);
 extern table2D_u8_u8_10 WUETable; ///< 10 bin Warm Up Enrichment map (2D)
@@ -594,6 +596,28 @@ static void test_corrections_closedloop_pid_rich_maxcorrection(void) {
   TEST_ASSERT_EQUAL(100U-configPage6.egoLimit, correctionAFRClosedLoop());
 }
 
+// Fork: while the PID auto tune runs, its relay drives the correction instead of the PID
+static void test_corrections_closedloop_pid_auto_tune(void) {
+  setup_ego_pid();
+  pidTuneController::details::setDefaults(configPage15);
+  initialisePidTune();
+  currentStatus.rotationStatus = EngineRotationStatus::Running;
+  // Lean: the PID would add fuel
+  currentStatus.O2 = configPage6.ego_max-1U;
+  currentStatus.egoCorrection = 100U;
+
+  TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_EGO_START, currentStatus, configPage6, configPage15));
+  TEST_ASSERT_TRUE(isPidTuneEgoRunning());
+
+  // Measuring the setpoint: the correction is held where it was
+  TEST_ASSERT_EQUAL(100U, run_pid(10, 0));
+
+  // Aborted: the PID takes over again
+  TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_ABORT, currentStatus, configPage6, configPage15));
+  TEST_ASSERT_FALSE(isPidTuneEgoRunning());
+  TEST_ASSERT_GREATER_THAN(100U, run_pid(10, 10));
+}
+
 static void test_corrections_closedloop(void)
 {
   RUN_TEST_P(test_corrections_closedloop_off_nosensor);
@@ -616,6 +640,7 @@ static void test_corrections_closedloop(void)
   RUN_TEST_P(test_corrections_closedloop_pid_lean_maxcorrection);
   RUN_TEST_P(test_corrections_closedloop_pid_rich);
   RUN_TEST_P(test_corrections_closedloop_pid_rich_maxcorrection);
+  RUN_TEST_P(test_corrections_closedloop_pid_auto_tune);
 }
 
 uint8_t correctionFlex(void);

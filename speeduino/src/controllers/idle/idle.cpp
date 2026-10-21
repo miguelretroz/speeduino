@@ -10,6 +10,7 @@ A full copy of the license may be found in the projects root directory
 #include "preprocessor.h"
 #include "units.h"
 #include "globals.h"
+#include "../pidTune/pidTuneController.h"
 
 using namespace idleController::detail;
 TESTABLE_STATIC state_t _idleState;
@@ -59,8 +60,77 @@ static inline void initialiseIdleUpOutput(void)
 
 static void setIdlePidTunings(const config6 &page6)
 {
-  _idleState.idlePID.setTunings(PidTuningParameters(page6.idleKP, page6.idleKI, page6.idleKD), millis(), 250); //4Hz means 250ms
+  // Fork: the gains come from the PID auto tune controller (a new result is applied without a jump)
+  _idleState.idlePID.setTunings(pidTuneIdleGains(page6), millis(), 250, pidTuneIdleTakeBumpless()); //4Hz means 250ms
   _idleState.idlePID.setSetPoint(_idleState.idle_cl_target_rpm);
+}
+
+/*
+Computes the closed loop output. Fork: while the PID auto tune runs, its relay drives the output instead of the PID.
+Returns true if the output was updated.
+*/
+static bool computeIdlePid(void)
+{
+  if (isPidTuneIdleRunning())
+  {
+    // The stepper stops short of its target by the step hysteresis: give the tune the real position
+    const int32_t realizedOutput = isStepperIac(configPage6) ? ((int32_t)_idleState.idleStepper.curIdleStep << 2) : _idleState.idle_pid_target_value;
+    return pidTuneIdleRelayStep(millis(), currentStatus.RPM, realizedOutput, _idleState.idle_pid_target_value);
+  }
+  return _idleState.idlePID.compute(millis(), currentStatus.RPM, &_idleState.idle_pid_target_value);
+}
+
+static inline bool isClosedLoopIdle(uint8_t algorithm)
+{
+  return (algorithm == IAC_ALGORITHM_PWM_CL)
+      || (algorithm == IAC_ALGORITHM_PWM_OLCL)
+      || (algorithm == IAC_ALGORITHM_STEP_CL)
+      || (algorithm == IAC_ALGORITHM_STEP_OLCL);
+}
+
+idleTuneInfo_t getIdleTuneInfo(void)
+{
+  idleTuneInfo_t info = {};
+  info.output = _idleState.idle_pid_target_value;
+  info.isStepper = isStepperIac(configPage6);
+  info.isVelocityForm = (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_CL);
+  // Same limits as configureIdlePID()
+  if (info.isStepper)
+  {
+    info.outputMin = ((int32_t)configPage2.iacCLminValue * 3) << 2;
+    info.outputMax = ((int32_t)configPage2.iacCLmaxValue * 3) << 2;
+  }
+  else
+  {
+    info.fullScale = (int32_t)_idleState.idle_pwm_max_count << 2;
+    info.outputMin = (int32_t)percentage(configPage2.iacCLminValue, (uint32_t)info.fullScale);
+    info.outputMax = (int32_t)percentage(configPage2.iacCLmaxValue, (uint32_t)info.fullScale);
+  }
+  const bool isHomed = !info.isStepper || (_idleState.completedHomeSteps >= ((unsigned int)configPage6.iacStepHome * 3U));
+  // Only the stepper modes taper from the cranking position
+  const bool isTapered = !info.isStepper || (_idleState.idleTaper >= configPage2.idleTaperTime);
+  info.isReady = isClosedLoopIdle(configPage6.iacAlgorithm)
+              && (_idleState.idleInitComplete == configPage6.iacAlgorithm)
+              && (currentStatus.rotationStatus == EngineRotationStatus::Running)
+              && isHomed
+              && isTapered;
+  return info;
+}
+
+void idleTuneHandBack(int32_t output)
+{
+  _idleState.idle_pid_target_value = output;
+  if (configPage6.iacAlgorithm == IAC_ALGORITHM_STEP_CL)
+  {
+    // The PID works on the change of the output, which is fed back as the feed forward term
+    _idleState.FeedForwardTerm = output;
+    _idleState.idlePID.setFeedForwardTerm(output);
+    _idleState.idlePID.reset(currentStatus.RPM);
+  }
+  else
+  {
+    _idleState.idlePID.presetOutput(output, currentStatus.RPM);
+  }
 }
 
 static void configureIdlePID(const config6 &page6, uint32_t minOutput, uint32_t maxOutput, uint16_t initialTarget)
@@ -450,7 +520,7 @@ void idleControl(void)
         _idleState.idle_cl_target_rpm = (uint16_t)currentStatus.CLIdleTarget * 10; //Multiply the byte target value back out by 10
         if( BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_1HZ) ) { setIdlePidTunings(configPage6); } //Re-read the PID settings once per second
         
-        PID_computed = _idleState.idlePID.compute(millis(), currentStatus.RPM, &_idleState.idle_pid_target_value);
+        PID_computed = computeIdlePid();
         long TEMP_idle_pwm_target_value;
         if(PID_computed == true)
         {
@@ -535,7 +605,7 @@ void idleControl(void)
         }
         
         _idleState.idlePID.setFeedForwardTerm(_idleState.FeedForwardTerm);
-        PID_computed = _idleState.idlePID.compute(millis(), currentStatus.RPM, &_idleState.idle_pid_target_value);
+        PID_computed = computeIdlePid();
 
         if(PID_computed == true)
         {
@@ -644,7 +714,7 @@ void idleControl(void)
           }
 
           _idleState.idlePID.setFeedForwardTerm(_idleState.FeedForwardTerm);
-          PID_computed = _idleState.idlePID.compute(millis(), currentStatus.RPM, &_idleState.idle_pid_target_value);
+          PID_computed = computeIdlePid();
 
           //If DFCO conditions are met keep output from changing
           if( (currentStatus.TPS > configPage2.iacTPSlimit) || _idleState.lastDFCOValue

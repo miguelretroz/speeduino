@@ -35,6 +35,7 @@ There are 2 top level functions that call more detailed corrections for Fuel and
 #include "units.h"
 #include "fuel_calcs.h"
 #include "unit_testing.h"
+#include "src/controllers/pidTune/pidTuneController.h"
 
 /** Instance of the PID object in case that algorithm is used (Always instantiated).
 * Needs to be global as it maintains state outside of each function call.
@@ -74,8 +75,9 @@ static constexpr uint8_t NO_FUEL_CORRECTION = ONE_HUNDRED_PCT;
 static constexpr uint8_t BASELINE_FUEL_CORRECTION = ONE_HUNDRED_PCT;
 
 static void setEgoPidTunings(const config6 &page6) {
-  egoPID.setOutputLimits(-page6.egoLimit, page6.egoLimit); 
-  egoPID.setTunings(PidTuningParameters(page6.egoKP, page6.egoKI, page6.egoKD) * -1); 
+  egoPID.setOutputLimits(-page6.egoLimit, page6.egoLimit);
+  // Fork: the gains come from the PID auto tune controller (a new result is applied without a jump)
+  egoPID.setTunings(pidTuneEgoGains(page6) * -1, pidTuneEgoTakeBumpless());
 }
 
 /** Initialise instances and vars related to corrections (at ECU boot-up).
@@ -704,6 +706,9 @@ static inline uint8_t computePIDCorrection(const statuses &current, const config
   setEgoPidTunings(page6);
   egoPID.setSetPoint(current.afrTarget);
 
+  // Fork: while the PID auto tune runs, its relay drives the correction instead of the PID
+  if (isPidTuneEgoRunning()) { return pidTuneEgoRelayStep(current, millis()); }
+
   // Can't do this in one step: MISRA compliance.
   int8_t correction = (int8_t)BASELINE_FUEL_CORRECTION + (int8_t)egoPID.compute(current.O2);
   return (uint8_t)correction;
@@ -743,6 +748,17 @@ static inline bool isAfrCorrectionEnabled(const statuses &current, const config6
       // If DFCO is active do not run the ego controllers to prevent iterator wind-up.
       && !current.isDFCOActive
       && isValidEgoAlgorithm(page6);
+}
+
+bool isAfrClosedLoopActive(void)
+{
+  return isAfrCorrectionEnabled(currentStatus, configPage6) && isAfrClosedLoopOperational(currentStatus, configPage6, configPage9);
+}
+
+void egoTuneHandBack(uint8_t correction)
+{
+  egoPID.presetOutput((int32_t)correction - (int32_t)BASELINE_FUEL_CORRECTION, currentStatus.O2);
+  currentStatus.egoCorrection = correction;
 }
 
 static inline uint8_t computeAFRCorrection(const statuses &current, const config6 &page6) {
