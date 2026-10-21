@@ -133,6 +133,16 @@ uint8_t loadColdStartAttempts(void);
 /** @copydoc loadColdStartAttempts */
 void saveColdStartAttempts(uint8_t attempts);
 
+/** @brief PID gain adaptation multiplier of the idle loop (%). Survives power cycles. */
+uint8_t loadPidAdaptIdle(void);
+/** @copydoc loadPidAdaptIdle */
+void savePidAdaptIdle(uint8_t multiplier);
+
+/** @brief PID gain adaptation multiplier of the AFR closed loop (%). Survives power cycles. */
+uint8_t loadPidAdaptEgo(void);
+/** @copydoc loadPidAdaptEgo */
+void savePidAdaptEgo(uint8_t multiplier);
+
 /** @brief Version of the fork specific config. The upstream data version can't be used for it. */
 uint8_t loadForkConfigVersion(void);
 /** @copydoc loadForkConfigVersion */

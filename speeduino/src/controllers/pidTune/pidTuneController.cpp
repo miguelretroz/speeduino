@@ -210,6 +210,75 @@ static TuneFail checkEgoConditions(const statuses &current, const config6 &page6
   return TuneFail::None;
 }
 
+// ---------------------------------------------------------------- Gain adaptation
+
+static void storeGains(adaptLoop_t &loop, uint8_t kp, uint8_t ki, uint8_t kd)
+{
+  loop.gains[0] = kp;
+  loop.gains[1] = ki;
+  loop.gains[2] = kd;
+}
+
+/** @brief Multiplier in use: 100% when the adaptation is off */
+static uint8_t getAppliedMultiplier(const adaptLoop_t &loop, bool isEnabled)
+{
+  return isEnabled ? loop.adapter.getMultiplier() : GainAdapter::DEFAULT_MULTIPLIER;
+}
+
+static void initialiseAdaptation(adaptLoop_t &loop, uint8_t storedMultiplier, uint8_t kp, uint8_t ki, uint8_t kd, bool isEnabled)
+{
+  loop.adapter.setMultiplier(storedMultiplier);
+  loop.savedMultiplier = loop.adapter.getMultiplier();
+  loop.appliedMultiplier = getAppliedMultiplier(loop, isEnabled);
+  storeGains(loop, kp, ki, kd);
+}
+
+/** @brief Back to 100%, saved straight away (E.g. reset by the user) */
+static void resetAdaptation(adaptLoop_t &loop, void (*pSave)(uint8_t))
+{
+  loop.adapter.reset();
+  if (loop.savedMultiplier != loop.adapter.getMultiplier())
+  {
+    loop.savedMultiplier = loop.adapter.getMultiplier();
+    pSave(loop.savedMultiplier);
+  }
+}
+
+/**
+ * @brief Gain adaptation housekeeping
+ * - P, I or D changed: back to 100%, the multiplier was for other gains
+ * - The multiplier in use changed: the next gain change mustn't make the output jump
+ * - Save the multiplier once it has been stable for a while, or when the engine stops
+ */
+static void updateAdaptation(adaptLoop_t &loop, bool isEnabled, uint8_t kp, uint8_t ki, uint8_t kd, bool isStopping, uint32_t nowMs, bool &isBumpless, void (*pSave)(uint8_t))
+{
+  if ((loop.gains[0] != kp) || (loop.gains[1] != ki) || (loop.gains[2] != kd))
+  {
+    storeGains(loop, kp, ki, kd);
+    loop.adapter.reset();
+  }
+
+  const uint8_t applied = getAppliedMultiplier(loop, isEnabled);
+  if (applied != loop.appliedMultiplier)
+  {
+    loop.appliedMultiplier = applied;
+    loop.changedMs = nowMs;
+    isBumpless = true;
+  }
+
+  const uint8_t multiplier = loop.adapter.getMultiplier();
+  if ((multiplier != loop.savedMultiplier) && (isStopping || hasIntervalElapsed(nowMs, loop.changedMs, ADAPT_SAVE_DELAY_MS)))
+  {
+    loop.savedMultiplier = multiplier;
+    pSave(multiplier);
+  }
+}
+
+static uint8_t getIdleLoads(const statuses &current)
+{
+  return (uint8_t)((isAirConOn(current) ? 1U : 0U) | (current.idleUpActive ? 2U : 0U) | ((current.fanDuty > 0U) ? 4U : 0U));
+}
+
 static void applyResult(config6 &page6)
 {
   if ((pidTuneState.tuner.getPhase() == TunePhase::Done) && !pidTuneState.isApplied)
@@ -220,6 +289,9 @@ static void applyResult(config6 &page6)
       page6.idleKI = pidTuneState.result.ki;
       page6.idleKD = pidTuneState.result.kd;
       pidTuneState.isIdleBumpless = true;
+      // New gains: the adaptation starts again from 100%
+      storeGains(pidTuneState.idleAdapt, page6.idleKP, page6.idleKI, page6.idleKD);
+      resetAdaptation(pidTuneState.idleAdapt, &savePidAdaptIdle);
     }
     else
     {
@@ -227,6 +299,8 @@ static void applyResult(config6 &page6)
       page6.egoKI = pidTuneState.result.ki;
       page6.egoKD = pidTuneState.result.kd;
       pidTuneState.isEgoBumpless = true;
+      storeGains(pidTuneState.egoAdapt, page6.egoKP, page6.egoKI, page6.egoKD);
+      resetAdaptation(pidTuneState.egoAdapt, &savePidAdaptEgo);
     }
     // TunerStudio won't burn these, as the firmware has priority over them: burn them here and ask it to reload the page
     savePage(afrSetPage);
@@ -245,6 +319,12 @@ TESTABLE_INLINE_STATIC void pidTuneControlCore(statuses &current, const config2 
     else { pidTuneState.tuner.update(nowMs); }
   }
   finishIfStopped(page15);
+
+  const bool isRunning = (current.rotationStatus == EngineRotationStatus::Running);
+  const bool isStopping = pidTuneState.wasRunning && !isRunning;
+  pidTuneState.wasRunning = isRunning;
+  updateAdaptation(pidTuneState.idleAdapt, page15.pidAdaptIdle != 0U, page6.idleKP, page6.idleKI, page6.idleKD, isStopping, nowMs, pidTuneState.isIdleBumpless, &savePidAdaptIdle);
+  updateAdaptation(pidTuneState.egoAdapt, page15.pidAdaptEgo != 0U, page6.egoKP, page6.egoKI, page6.egoKD, isStopping, nowMs, pidTuneState.isEgoBumpless, &savePidAdaptEgo);
 }
 
 TESTABLE_INLINE_STATIC bool pidTuneCommandCore(uint16_t command, statuses &current, const config2 &page2, config6 &page6, const config15 &page15, uint32_t nowMs)
@@ -273,16 +353,26 @@ TESTABLE_INLINE_STATIC bool pidTuneCommandCore(uint16_t command, statuses &curre
       applyResult(page6);
       break;
 
+    case TS_CMD_PIDTUNE_ADAPT_RESET_IDLE:
+      resetAdaptation(pidTuneState.idleAdapt, &savePidAdaptIdle);
+      break;
+
+    case TS_CMD_PIDTUNE_ADAPT_RESET_EGO:
+      resetAdaptation(pidTuneState.egoAdapt, &savePidAdaptEgo);
+      break;
+
     default:
-      // Unknown command of this group (E.g. the gain adaptation, when disabled): nothing for anyone else
+      // Unknown command of this group: nothing for anyone else
       break;
   }
   return true;
 }
 
-void initialisePidTune(void)
+void initialisePidTune(const config6 &page6, const config15 &page15)
 {
   pidTuneState = state_t();
+  initialiseAdaptation(pidTuneState.idleAdapt, loadPidAdaptIdle(), page6.idleKP, page6.idleKI, page6.idleKD, page15.pidAdaptIdle != 0U);
+  initialiseAdaptation(pidTuneState.egoAdapt, loadPidAdaptEgo(), page6.egoKP, page6.egoKI, page6.egoKD, page15.pidAdaptEgo != 0U);
 }
 
 bool isPidTuneIdleRunning(void)
@@ -304,7 +394,31 @@ bool pidTuneIdleRelayStep(uint32_t nowMs, uint16_t rpm, int32_t realizedOutput, 
 
 PidTuningParameters pidTuneIdleGains(const config6 &page6)
 {
-  return PidTuningParameters(page6.idleKP, page6.idleKI, page6.idleKD);
+  const PidTuningParameters gains(page6.idleKP, page6.idleKI, page6.idleKD);
+  return (configPage15.pidAdaptIdle != 0U) ? pidTuneState.idleAdapt.adapter.apply(gains) : gains;
+}
+
+void pidTuneIdleAdaptSample(const statuses &current, int16_t error, int32_t output, uint32_t nowMs)
+{
+  if (configPage15.pidAdaptIdle == 0U) { return; }
+
+  const idleTuneInfo_t idle = getIdleTuneInfo();
+  const uint8_t loads = getIdleLoads(current);
+  // A load switching on or off disturbs the loop. At the output limits the loop can't do more, whatever the gains.
+  const bool isSteady = idle.isReady
+                     && !pidTuneState.tuner.isRunning()
+                     && (current.TPS <= configPage2.iacTPSlimit)
+                     && !current.isDFCOActive
+                     && (loads == pidTuneState.idleAdaptLoads)
+                     && (output > idle.outputMin)
+                     && (output < idle.outputMax);
+  pidTuneState.idleAdaptLoads = loads;
+
+  gainAdaptConfig_t config;
+  config.band = configPage15.pidAdaptIdleBand;
+  config.windowMs = (uint32_t)configPage15.pidAdaptWindow * 1000UL;
+  config.stepPct = configPage15.pidAdaptStep;
+  if (pidTuneState.idleAdapt.adapter.sample(error, isSteady, nowMs, config)) { pidTuneState.isIdleBumpless = true; }
 }
 
 bool pidTuneIdleTakeBumpless(void)
@@ -329,7 +443,32 @@ uint8_t pidTuneEgoRelayStep(const statuses &current, uint32_t nowMs)
 
 PidTuningParameters pidTuneEgoGains(const config6 &page6)
 {
-  return PidTuningParameters(page6.egoKP, page6.egoKI, page6.egoKD);
+  const PidTuningParameters gains(page6.egoKP, page6.egoKI, page6.egoKD);
+  return (configPage15.pidAdaptEgo != 0U) ? pidTuneState.egoAdapt.adapter.apply(gains) : gains;
+}
+
+void pidTuneEgoAdaptSample(const statuses &current, const config6 &page6, uint8_t correction, uint32_t nowMs)
+{
+  if (configPage15.pidAdaptEgo == 0U) { return; }
+
+  const int16_t offset = (int16_t)correction - (int16_t)ONE_HUNDRED_PCT;
+  const bool isSaturated = (((offset < 0) ? -offset : offset) >= (int16_t)page6.egoLimit);
+  // The loop behaves differently at another operating point: start a new window
+  if (!pidTuneState.egoAdapt.adapter.isWindowRunning()) { pidTuneState.egoAdaptRpm = current.RPM; }
+  const uint16_t rpmWindow = (uint16_t)(((uint32_t)pidTuneState.egoAdaptRpm * EGO_ADAPT_RPM_WINDOW_PCT) / 100U);
+  const bool isSteady = !pidTuneState.tuner.isRunning()
+                     && !isSaturated
+                     && !current.isAcceleratingTPS
+                     && !current.isDeceleratingTPS
+                     && !current.aseIsActive
+                     && (absDifference(current.RPM, pidTuneState.egoAdaptRpm) <= rpmWindow);
+
+  gainAdaptConfig_t config;
+  config.band = configPage15.pidAdaptEgoBand;
+  config.windowMs = (uint32_t)configPage15.pidAdaptWindow * 1000UL;
+  config.stepPct = configPage15.pidAdaptStep;
+  const int16_t error = (int16_t)current.afrTarget - (int16_t)current.O2;
+  if (pidTuneState.egoAdapt.adapter.sample(error, isSteady, nowMs, config)) { pidTuneState.isEgoBumpless = true; }
 }
 
 bool pidTuneEgoTakeBumpless(void)
@@ -355,6 +494,16 @@ static uint8_t getStatusByte(void)
   return status;
 }
 
+static uint8_t getAdaptStatusByte(void)
+{
+  static_assert((uint8_t)AdaptDecision::Hold <= 0x07U, "Decision does not fit in 3 bits");
+  uint8_t status = (uint8_t)((uint8_t)pidTuneState.idleAdapt.adapter.getLastDecision() << 2U)
+                 | (uint8_t)((uint8_t)pidTuneState.egoAdapt.adapter.getLastDecision() << 5U);
+  if (pidTuneState.idleAdapt.adapter.isWindowRunning()) { status |= 0x01U; }
+  if (pidTuneState.egoAdapt.adapter.isWindowRunning()) { status |= 0x02U; }
+  return status;
+}
+
 uint8_t getPidTuneLogByte(uint8_t index)
 {
   uint8_t value = 0U;
@@ -372,8 +521,9 @@ uint8_t getPidTuneLogByte(uint8_t index)
     case 9U: value = lowByte(pidTuneState.ultimateGainQ8); break;
     case 10U: value = highByte(pidTuneState.ultimateGainQ8); break;
     case 11U: value = pidTuneState.tuner.getCycles(); break;
-    case 12U: value = ONE_HUNDRED_PCT; break; // Gain adaptation, idle
-    case 13U: value = ONE_HUNDRED_PCT; break; // Gain adaptation, AFR
+    case 12U: value = pidTuneState.idleAdapt.appliedMultiplier; break;
+    case 13U: value = pidTuneState.egoAdapt.appliedMultiplier; break;
+    case 14U: value = getAdaptStatusByte(); break;
     default: value = 0U; break;
   }
   return value;

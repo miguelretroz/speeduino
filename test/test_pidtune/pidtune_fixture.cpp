@@ -16,7 +16,7 @@ static void reset_globals(void)
     configPage9 = config9();
     configPage15 = config15();
     pidTuneController::details::setDefaults(configPage15);
-    initialisePidTune();
+    initialisePidTune(configPage6, configPage15);
 }
 
 void setup_idle_tune(void)

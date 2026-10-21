@@ -4,6 +4,7 @@
 #include "config_pages.h"
 #include "relayTuner.h"
 #include "pidTuneRules.h"
+#include "gainAdapt.h"
 
 namespace pidTuneController {
 
@@ -30,11 +31,26 @@ namespace details {
   /** @brief AFR: abort if the TPS moves more than this from where the test started (Unit: 0.5%) */
   constexpr uint8_t EGO_TPS_WINDOW = 4U;
 
+  /** @brief Gain adaptation: a multiplier is saved once it has been stable for this long (or when the engine stops) */
+  constexpr uint32_t ADAPT_SAVE_DELAY_MS = 60000UL;
+  /** @brief AFR gain adaptation: a window restarts if the RPM moves more than this from where it started (%) */
+  constexpr uint8_t EGO_ADAPT_RPM_WINDOW_PCT = 15U;
+
   /** @brief The loop being tuned */
   enum class TuneLoop : uint8_t
   {
     Idle,
     Ego,
+  };
+
+  /** @brief Gain adaptation of one loop */
+  struct adaptLoop_t
+  {
+    pidTune::GainAdapter adapter;
+    uint8_t gains[3] = {};             ///< P, I and D the multiplier applies to: a change resets it
+    uint8_t appliedMultiplier = 100U;  ///< Multiplier in use (100 when the adaptation is off)
+    uint8_t savedMultiplier = 100U;    ///< Multiplier in EEPROM
+    uint32_t changedMs = 0U;           ///< When the multiplier last changed
   };
 
   struct state_t
@@ -58,6 +74,12 @@ namespace details {
     uint16_t startRpm = 0U;
     uint16_t startMap = 0U;
     uint32_t lastSampleMs = 0U;        ///< Last relay sample
+
+    adaptLoop_t idleAdapt;
+    adaptLoop_t egoAdapt;
+    uint8_t idleAdaptLoads = 0U;       ///< Idle loads (A/C, idle up, fan) at the last adaptation sample: a change isn't steady
+    uint16_t egoAdaptRpm = 0U;         ///< RPM the AFR adaptation window started at
+    bool wasRunning = false;           ///< The engine was running at the last check
   };
 
   /** @brief Set the PID auto tune and gain adaptation fields of page 15 to their defaults. Adaptation off. */

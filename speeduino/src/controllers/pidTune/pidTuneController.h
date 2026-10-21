@@ -2,15 +2,18 @@
 
 /**
  * @file
- * @brief PID auto tune for the idle and AFR closed loops. Fork specific.
+ * @brief PID auto tune and gain adaptation for the idle and AFR closed loops. Fork specific.
  *
- * Started from TunerStudio, with the engine in a steady condition:
+ * Auto tune, started from TunerStudio with the engine in a steady condition:
  * - Idle: closed loop idle running (PWM or stepper), throttle closed. The valve is switched around its position.
  * - AFR: AFR closed loop running with the PID algorithm and a wideband sensor. The fuel correction is switched around its value.
  *
  * While the test runs, a relay replaces the PID (see relayTuner.h). When it stops (done, failed or aborted) the
  * PID takes over again from where the test started, without a jump. The suggested P, I and D are shown live, and
  * Apply writes them to the tune (page 6) and burns them.
+ *
+ * Gain adaptation (each loop can be turned on separately): a multiplier of P, I and D, slowly adjusted while the
+ * loop runs (see gainAdapt.h). It's kept in EEPROM and goes back to 100% when P, I or D change.
  */
 
 #include "statuses.h"
@@ -27,7 +30,8 @@ constexpr uint16_t TS_CMD_PIDTUNE_ADAPT_RESET_IDLE = 0x4004U;
 constexpr uint16_t TS_CMD_PIDTUNE_ADAPT_RESET_EGO  = 0x4005U;
 ///@}
 
-void initialisePidTune(void);
+/** @brief Loads the gain adaptation multipliers. Call it after the config has been loaded. */
+void initialisePidTune(const config6 &page6, const config15 &page15);
 
 /** @brief Checks the operating conditions and the timeouts of a running test. Call it at 10Hz. */
 void pidTuneControl(statuses &current, const config2 &page2, const config6 &page6, const config15 &page15);
@@ -54,8 +58,16 @@ bool isPidTuneIdleRunning(void);
  */
 bool pidTuneIdleRelayStep(uint32_t nowMs, uint16_t rpm, int32_t realizedOutput, int32_t &output);
 
-/** @brief The idle PID gains */
+/** @brief The idle PID gains: the config bytes, scaled by the gain adaptation when it's on */
 PidTuningParameters pidTuneIdleGains(const config6 &page6);
+
+/**
+ * @brief Feed the gain adaptation, after each idle PID computation
+ *
+ * @param error Target RPM - RPM
+ * @param output The PID output
+ */
+void pidTuneIdleAdaptSample(const statuses &current, int16_t error, int32_t output, uint32_t nowMs);
 
 /** @brief True (once) when the next idle gain change must not make the output jump */
 bool pidTuneIdleTakeBumpless(void);
@@ -69,8 +81,15 @@ bool isPidTuneEgoRunning(void);
 /** @brief Run the relay instead of the AFR PID, for one closed loop step. Returns the correction (%). */
 uint8_t pidTuneEgoRelayStep(const statuses &current, uint32_t nowMs);
 
-/** @brief The AFR closed loop PID gains */
+/** @brief The AFR closed loop PID gains: the config bytes, scaled by the gain adaptation when it's on */
 PidTuningParameters pidTuneEgoGains(const config6 &page6);
+
+/**
+ * @brief Feed the gain adaptation, after each AFR closed loop PID step
+ *
+ * @param correction The correction the PID worked out (%)
+ */
+void pidTuneEgoAdaptSample(const statuses &current, const config6 &page6, uint8_t correction, uint32_t nowMs);
 
 /** @brief True (once) when the next AFR gain change must not make the output jump */
 bool pidTuneEgoTakeBumpless(void);

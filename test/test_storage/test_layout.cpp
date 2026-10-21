@@ -263,11 +263,59 @@ static void test_oil_calibration_no_overlap(void) {
     }
 }
 
+// Fork specific: the PID gain adaptation multipliers, also in the gap after page 15
+static uint16_t lastWriteAddress;
+static byte recordingRead(uint16_t address) { (void)address; return 0U; }
+static void recordingWrite(uint16_t address, byte value) { (void)value; lastWriteAddress = address; }
+static uint16_t recordingLength(void) { return 4096U; }
+static uint16_t recordingWriteBlockSize(const statuses &current) { (void)current; return UINT16_MAX; }
+
+static void assert_fork_byte_no_overlap(uint16_t address) {
+    block fork = { address, 1U };
+    for (uint8_t page = MIN_PAGE_NUM; page < MAX_PAGE_NUM; ++page) {
+        for (page_iterator_t iter = page_begin(page); iter.entity.type!=EntityType::End; iter = advance(iter)) {
+            if (iter.entity.type!=EntityType::NoEntity) {
+                block entity = { getEntityStartAddress(iter), iter.entity.size };
+                TEST_ASSERT_FALSE_MESSAGE(blocksOverlap(fork, entity), getEntityName(iter));
+            }
+        }
+    }
+    constexpr SensorCalibrationTableElement elements[] = { SensorCalibrationTableElement::Crc, SensorCalibrationTableElement::Bins, SensorCalibrationTableElement::Values };
+    constexpr SensorCalibrationTable tables[] = { SensorCalibrationTable::CoolantSensor, SensorCalibrationTable::IntakeAirTempSensor, SensorCalibrationTable::O2Sensor, SensorCalibrationTable::OilTempSensor };
+    for (auto table : tables) {
+        for (auto element : elements) {
+            TEST_ASSERT_FALSE(blocksOverlap(fork, getCalibrationBlock(table, element)));
+        }
+    }
+    // Reserved for the DS3231 (3668-3671), then the fork version and the cold start attempts (3672-3673)
+    TEST_ASSERT_LESS_THAN_UINT16(3668U, address);
+}
+
+static void test_pid_adaptation_no_overlap(void) {
+    const storage_api_t original = getStorageAPI();
+    setStorageAPI({ .read = recordingRead, .write = recordingWrite, .length = recordingLength, .getMaxWriteBlockSize = recordingWriteBlockSize });
+
+    lastWriteAddress = 0U;
+    savePidAdaptIdle(1U);
+    const uint16_t idleAddress = lastWriteAddress;
+    lastWriteAddress = 0U;
+    savePidAdaptEgo(1U);
+    const uint16_t egoAddress = lastWriteAddress;
+    setStorageAPI(original);
+
+    TEST_ASSERT_NOT_EQUAL(0U, idleAddress);
+    TEST_ASSERT_NOT_EQUAL(0U, egoAddress);
+    TEST_ASSERT_NOT_EQUAL(idleAddress, egoAddress);
+    assert_fork_byte_no_overlap(idleAddress);
+    assert_fork_byte_no_overlap(egoAddress);
+}
+
 void test_layout(void) {
     SET_UNITY_FILENAME() {
         RUN_TEST_P(test_getEntityStartAddress_invalid_entity);
         RUN_TEST_P(test_no_entity_overlap);
         RUN_TEST_P(test_oil_calibration_no_overlap);
+        RUN_TEST_P(test_pid_adaptation_no_overlap);
         RUN_TEST_P(print_eeprom_layout);
     }
 }

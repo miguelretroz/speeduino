@@ -711,6 +711,8 @@ static inline uint8_t computePIDCorrection(const statuses &current, const config
 
   // Can't do this in one step: MISRA compliance.
   int8_t correction = (int8_t)BASELINE_FUEL_CORRECTION + (int8_t)egoPID.compute(current.O2);
+  // Fork: the PID gain adaptation watches the error
+  pidTuneEgoAdaptSample(current, page6, (uint8_t)correction, millis());
   return (uint8_t)correction;
 }
 

@@ -14,6 +14,9 @@ struct fake_fork_storage_t
     uint8_t attempts = 0xFFU;     ///< Cold start attempts
     uint16_t attemptWrites = 0U;
     uint8_t oilCalibration[100];  ///< Oil temperature calibration: CRC, bins, values
+    uint8_t pidAdaptIdle = 0xFFU; ///< PID gain adaptation multipliers
+    uint8_t pidAdaptEgo = 0xFFU;
+    uint16_t pidAdaptWrites = 0U;
 };
 extern fake_fork_storage_t fakeForkStorage;
 

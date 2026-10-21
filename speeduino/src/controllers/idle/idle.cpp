@@ -71,13 +71,23 @@ Returns true if the output was updated.
 */
 static bool computeIdlePid(void)
 {
+  const uint32_t nowMs = millis();
   if (isPidTuneIdleRunning())
   {
     // The stepper stops short of its target by the step hysteresis: give the tune the real position
     const int32_t realizedOutput = isStepperIac(configPage6) ? ((int32_t)_idleState.idleStepper.curIdleStep << 2) : _idleState.idle_pid_target_value;
-    return pidTuneIdleRelayStep(millis(), currentStatus.RPM, realizedOutput, _idleState.idle_pid_target_value);
+    return pidTuneIdleRelayStep(nowMs, currentStatus.RPM, realizedOutput, _idleState.idle_pid_target_value);
   }
-  return _idleState.idlePID.compute(millis(), currentStatus.RPM, &_idleState.idle_pid_target_value);
+
+  const bool isComputed = _idleState.idlePID.compute(nowMs, currentStatus.RPM, &_idleState.idle_pid_target_value);
+  if (isComputed)
+  {
+    // The PID gain adaptation watches the error
+    const int32_t error = _idleState.idle_cl_target_rpm - (int32_t)currentStatus.RPM;
+    const int16_t clampedError = (error > INT16_MAX) ? INT16_MAX : ((error < INT16_MIN) ? INT16_MIN : (int16_t)error);
+    pidTuneIdleAdaptSample(currentStatus, clampedError, _idleState.idle_pid_target_value, nowMs);
+  }
+  return isComputed;
 }
 
 static inline bool isClosedLoopIdle(uint8_t algorithm)

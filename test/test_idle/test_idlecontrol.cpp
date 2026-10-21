@@ -939,7 +939,7 @@ static void test_stepOpenLoopClosedLoopAutoTuneDrivesTheValve(void)
   context_t context;
   prepare_stepClosedLoop(context, IAC_ALGORITHM_STEP_OLCL);
   pidTuneController::details::setDefaults(context.page15);
-  initialisePidTune();
+  initialisePidTune(configPage6, configPage15);
   // The PID would move the valve away from where it is
   context.page6.idleKP = 100U;
   context.page2.iacTPSlimit = 10U;
@@ -979,7 +979,7 @@ static void test_pwmClosedLoopAutoTuneDrivesTheValve(void)
   context.current.rotationStatus = EngineRotationStatus::Running;
   initialiseIdle(false);
   pidTuneController::details::setDefaults(context.page15);
-  initialisePidTune();
+  initialisePidTune(configPage6, configPage15);
   // 40% duty
   const int32_t base = (int32_t)percentage(40U, (uint32_t)_idleState.idle_pwm_max_count << 2);
   _idleState.idle_pid_target_value = base;
@@ -995,6 +995,33 @@ static void test_pwmClosedLoopAutoTuneDrivesTheValve(void)
   TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_ABORT, context.current, context.page6, context.page15));
   TEST_ASSERT_FALSE(isPidTuneIdleRunning());
 }
+// Fork: each closed loop PID computation feeds the gain adaptation
+static void test_pwmClosedLoopFeedsTheGainAdaptation(void)
+{
+  extern pidTuneController::details::state_t pidTuneState;
+  context_t context;
+  context.prepare_idle(IAC_ALGORITHM_PWM_CL);
+  context.page6.idleFreq = 100U;
+  context.current.coolant = 50;
+  context.current.TPS = 0U;
+  context.current.RPM = 900U;
+  context.current.CLIdleTarget = 90U;
+  context.current.rotationStatus = EngineRotationStatus::Running;
+  _idleState.idle_cl_target_rpm = 900;
+  initialiseIdle(false);
+  pidTuneController::details::setDefaults(context.page15);
+  context.page15.pidAdaptIdle = 1U;
+  initialisePidTune(context.page6, context.page15);
+  // On target at 40% duty, well inside the limits
+  _idleState.idlePID.presetOutput((int32_t)percentage(40U, (uint32_t)_idleState.idle_pwm_max_count << 2), 900);
+  TEST_ASSERT_FALSE(pidTuneState.idleAdapt.adapter.isWindowRunning());
+
+  idleControl();
+
+  TEST_ASSERT_TRUE(pidTuneState.idleAdapt.adapter.isWindowRunning());
+  context.page15.pidAdaptIdle = 0U;
+}
+
 void testIdleControl(void)
 {
   unity_filename_guard_t guard(__FILE__);
@@ -1040,4 +1067,5 @@ void testIdleControl(void)
   RUN_TEST_P(test_stepperModeDisablesIdle);
   RUN_TEST_P(test_stepOpenLoopClosedLoopAutoTuneDrivesTheValve);
   RUN_TEST_P(test_pwmClosedLoopAutoTuneDrivesTheValve);
+  RUN_TEST_P(test_pwmClosedLoopFeedsTheGainAdaptation);
 }

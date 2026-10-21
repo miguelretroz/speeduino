@@ -191,7 +191,7 @@ void initialiseAll(void)
     initialiseNitrous();
     initialiseVvtWmi(currentStatus, pinNumbers, configPage4, configPage6, configPage10);
     initialiseCorrections();
-    initialisePidTune();
+    initialisePidTune(configPage6, configPage15);
     currentStatus.ioError = false; //Clear the I/O error bit. The bit will be set in initialiseADC() if there is problem in there.
     initialiseADC();
     initialiseMAPBaro();

@@ -99,11 +99,14 @@ constexpr uint16_t EEPROM_CONFIG15_START = 3281;
 constexpr uint16_t EEPROM_FORK_CONFIG_VERSION = 3672;
 constexpr uint16_t EEPROM_COLDSTART_ATTEMPTS  = 3673;
 // 3668-3671 reserved for the DS3231 cold start counter reset (see docs/cold-start-ds3231-plan.md on its branch)
+constexpr uint16_t EEPROM_PIDADAPT_EGO        = 3667;
+constexpr uint16_t EEPROM_PIDADAPT_IDLE       = 3666;
 constexpr uint16_t EEPROM_CALIBRATION_OIL_CRC    = 3564;
 constexpr uint16_t EEPROM_CALIBRATION_OIL_BINS   = EEPROM_CALIBRATION_OIL_CRC+sizeof(uint32_t);
 constexpr uint16_t EEPROM_CALIBRATION_OIL_VALUES = EEPROM_CALIBRATION_OIL_BINS+getCalibrationElementSize(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Bins);
 static_assert(EEPROM_CALIBRATION_OIL_CRC >= EEPROM_CONFIG15_START+sizeof(config15), "Oil calibration overlaps page 15");
-static_assert(EEPROM_CALIBRATION_OIL_VALUES+getCalibrationElementSize(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Values) <= 3668U, "Oil calibration overlaps the reserved fork bytes");
+static_assert(EEPROM_CALIBRATION_OIL_VALUES+getCalibrationElementSize(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Values) <= EEPROM_PIDADAPT_IDLE, "Oil calibration overlaps the PID gain adaptation");
+static_assert(EEPROM_PIDADAPT_EGO < 3668U, "PID gain adaptation overlaps the reserved fork bytes");
 static_assert(EEPROM_COLDSTART_ATTEMPTS < 3674U, "Fork data overlaps the calibration CRCs"); // 3674 == EEPROM_CALIBRATION_CLT_CRC
 
 TESTABLE_INLINE_STATIC uint16_t getSensorCalibrationAddress(SensorCalibrationTable sensor, SensorCalibrationTableElement element) {
@@ -699,6 +702,24 @@ uint8_t loadColdStartAttempts(void)
 void saveColdStartAttempts(uint8_t attempts)
 {
   (void)update(getStorageAPI(), EEPROM_COLDSTART_ATTEMPTS, attempts);
+}
+
+uint8_t loadPidAdaptIdle(void)
+{
+  return getStorageAPI().read(EEPROM_PIDADAPT_IDLE);
+}
+void savePidAdaptIdle(uint8_t multiplier)
+{
+  (void)update(getStorageAPI(), EEPROM_PIDADAPT_IDLE, multiplier);
+}
+
+uint8_t loadPidAdaptEgo(void)
+{
+  return getStorageAPI().read(EEPROM_PIDADAPT_EGO);
+}
+void savePidAdaptEgo(uint8_t multiplier)
+{
+  (void)update(getStorageAPI(), EEPROM_PIDADAPT_EGO, multiplier);
 }
 
 uint8_t loadForkConfigVersion(void)

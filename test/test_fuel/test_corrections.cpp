@@ -600,7 +600,7 @@ static void test_corrections_closedloop_pid_rich_maxcorrection(void) {
 static void test_corrections_closedloop_pid_auto_tune(void) {
   setup_ego_pid();
   pidTuneController::details::setDefaults(configPage15);
-  initialisePidTune();
+  initialisePidTune(configPage6, configPage15);
   currentStatus.rotationStatus = EngineRotationStatus::Running;
   // Lean: the PID would add fuel
   currentStatus.O2 = configPage6.ego_max-1U;
@@ -616,6 +616,25 @@ static void test_corrections_closedloop_pid_auto_tune(void) {
   TEST_ASSERT_TRUE(handlePidTuneCommand(TS_CMD_PIDTUNE_ABORT, currentStatus, configPage6, configPage15));
   TEST_ASSERT_FALSE(isPidTuneEgoRunning());
   TEST_ASSERT_GREATER_THAN(100U, run_pid(10, 10));
+}
+
+// Fork: each closed loop PID step feeds the gain adaptation
+static void test_corrections_closedloop_pid_feeds_the_gain_adaptation(void) {
+  extern pidTuneController::details::state_t pidTuneState;
+  setup_ego_pid();
+  pidTuneController::details::setDefaults(configPage15);
+  configPage15.pidAdaptEgo = 1U;
+  initialisePidTune(configPage6, configPage15);
+  currentStatus.isAcceleratingTPS = false;
+  currentStatus.isDeceleratingTPS = false;
+  currentStatus.aseIsActive = false;
+  currentStatus.O2 = currentStatus.afrTarget;
+  TEST_ASSERT_FALSE(pidTuneState.egoAdapt.adapter.isWindowRunning());
+
+  TEST_ASSERT_EQUAL(100U, run_pid(1, 0));
+
+  TEST_ASSERT_TRUE(pidTuneState.egoAdapt.adapter.isWindowRunning());
+  configPage15.pidAdaptEgo = 0U;
 }
 
 static void test_corrections_closedloop(void)
@@ -641,6 +660,7 @@ static void test_corrections_closedloop(void)
   RUN_TEST_P(test_corrections_closedloop_pid_rich);
   RUN_TEST_P(test_corrections_closedloop_pid_rich_maxcorrection);
   RUN_TEST_P(test_corrections_closedloop_pid_auto_tune);
+  RUN_TEST_P(test_corrections_closedloop_pid_feeds_the_gain_adaptation);
 }
 
 uint8_t correctionFlex(void);
