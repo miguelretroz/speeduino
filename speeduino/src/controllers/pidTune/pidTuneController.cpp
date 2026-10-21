@@ -279,11 +279,27 @@ static uint8_t getIdleLoads(const statuses &current)
   return (uint8_t)((isAirConOn(current) ? 1U : 0U) | (current.idleUpActive ? 2U : 0U) | ((current.fanDuty > 0U) ? 4U : 0U));
 }
 
+/** @brief The result still fits the loop: same algorithm kind as when the test ran */
+static bool isResultValidFor(const config6 &page6)
+{
+  if (pidTuneState.loop == TuneLoop::Idle)
+  {
+    // The bytes mean something else in stepper closed loop (velocity form)
+    return isIdleClosedLoop(page6.iacAlgorithm) && ((page6.iacAlgorithm == IAC_ALGORITHM_STEP_CL) == pidTuneState.isVelocityForm);
+  }
+  return page6.egoAlgorithm == EGO_ALGORITHM_PID;
+}
+
 static void applyResult(config6 &page6)
 {
   if ((pidTuneState.tuner.getPhase() == TunePhase::Done) && !pidTuneState.isApplied)
   {
-    if (pidTuneState.loop == TuneLoop::Idle)
+    if (!isResultValidFor(page6))
+    {
+      // The loop was changed since the test
+      pidTuneState.tuner.fail(TuneFail::WrongMode);
+    }
+    else if (pidTuneState.loop == TuneLoop::Idle)
     {
       page6.idleKP = pidTuneState.result.kp;
       page6.idleKI = pidTuneState.result.ki;
@@ -302,11 +318,15 @@ static void applyResult(config6 &page6)
       storeGains(pidTuneState.egoAdapt, page6.egoKP, page6.egoKI, page6.egoKD);
       resetAdaptation(pidTuneState.egoAdapt, &savePidAdaptEgo);
     }
-    // TunerStudio won't burn these, as the firmware has priority over them: burn them here and ask it to reload the page
-    savePage(afrSetPage);
-    pidTuneState.isApplied = true;
-    pidTuneState.isUiRefresh = true;
-    pidTuneState.isUiRefreshSent = false;
+
+    if (pidTuneState.tuner.getPhase() == TunePhase::Done)
+    {
+      // TunerStudio won't burn these, as the firmware has priority over them: burn them here and ask it to reload the page
+      savePage(afrSetPage);
+      pidTuneState.isApplied = true;
+      pidTuneState.isUiRefresh = true;
+      pidTuneState.isUiRefreshSent = false;
+    }
   }
 }
 

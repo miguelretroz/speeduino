@@ -241,6 +241,21 @@ static void test_apply_idle_result(void)
     TEST_ASSERT_EQUAL_UINT8(50U, configPage6.idleKP);
 }
 
+// The bytes mean something else in stepper closed loop (velocity form): a result for the open + closed loop mode can't go there
+static void test_apply_refused_after_a_mode_change(void)
+{
+    run_idle_tune_to_done();
+    configPage6.idleKP = 50U;
+    configPage6.iacAlgorithm = IAC_ALGORITHM_STEP_CL;
+
+    (void)send_command(TS_CMD_PIDTUNE_APPLY, TEST_START_MS);
+
+    TEST_ASSERT_EQUAL_UINT8(50U, configPage6.idleKP);
+    assert_failed(TuneFail::WrongMode);
+    TEST_ASSERT_FALSE(pidTuneState.isApplied);
+    TEST_ASSERT_FALSE(pidTuneState.isUiRefresh);
+}
+
 static void test_apply_needs_a_result(void)
 {
     setup_idle_tune();
@@ -409,6 +424,7 @@ void testPidTuneController(void)
     RUN_TEST_P(test_idle_timeout_without_samples);
     RUN_TEST_P(test_abort_command);
     RUN_TEST_P(test_apply_idle_result);
+    RUN_TEST_P(test_apply_refused_after_a_mode_change);
     RUN_TEST_P(test_apply_needs_a_result);
     RUN_TEST_P(test_idle_gains_are_the_config_bytes);
     RUN_TEST_P(test_commands_of_other_groups_are_ignored);
