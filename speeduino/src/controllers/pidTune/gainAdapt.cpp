@@ -38,7 +38,10 @@ bool GainAdapter::sample(int16_t error, bool isSteady, uint32_t nowMs, const gai
     _isWindowRunning = false;
     return false;
   }
+  // The loop was off for a while: what's left of the window is stale
+  if (_isWindowRunning && hasIntervalElapsed(nowMs, _lastSampleMs, MAX_SAMPLE_GAP_MS)) { _isWindowRunning = false; }
   if (!_isWindowRunning) { startWindow(error, nowMs); }
+  _lastSampleMs = nowMs;
 
   _filteredError += (((int32_t)error * 16L) - _filteredError) / FILTER_DIVIDER;
   const int32_t filtered = _filteredError / 16L;
@@ -48,13 +51,22 @@ bool GainAdapter::sample(int16_t error, bool isSteady, uint32_t nowMs, const gai
   // Crossings are counted from one side of the band to the other, so small swings inside the band don't count
   const uint16_t band = (config.band == 0U) ? 1U : config.band;
   int8_t side = 0;
-  if (filtered > (int32_t)band) { side = 1; }
-  else if (filtered < -(int32_t)band) { side = -1; }
+  if (error > (int32_t)band) { side = 1; }
+  else if (error < -(int32_t)band) { side = -1; }
   else { /* Inside the band */ }
-  if (side != 0)
+  if ((side != 0) && (side == _newSide))
   {
-    if ((_lastSide != 0) && (side != _lastSide) && (_crossings < UINT8_MAX)) { ++_crossings; }
-    _lastSide = side;
+    if (_newSideSamples < UINT8_MAX) { ++_newSideSamples; }
+  }
+  else
+  {
+    _newSide = side;
+    _newSideSamples = (side != 0) ? 1U : 0U;
+  }
+  if ((_newSideSamples >= SIDE_SAMPLES) && (_newSide != _side))
+  {
+    if ((_side != 0) && (_crossings < UINT8_MAX)) { ++_crossings; }
+    _side = _newSide;
   }
 
   bool isChanged = false;
@@ -95,7 +107,9 @@ void GainAdapter::startWindow(int16_t error, uint32_t nowMs)
 {
   _isWindowRunning = true;
   _windowStartMs = nowMs;
-  _lastSide = 0;
+  _side = 0;
+  _newSide = 0;
+  _newSideSamples = 0U;
   _crossings = 0U;
   _samples = 0U;
   _filteredError = (int32_t)error * 16L;

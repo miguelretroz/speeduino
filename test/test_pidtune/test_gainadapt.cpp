@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <math.h>
 #include "src/controllers/pidTune/gainAdapt.h"
 #include "../test_utils.h"
 
@@ -70,6 +71,53 @@ static void test_adapt_holds_on_target(void)
     (void)runWindow(adapter, 20000UL, oneCrossing);
     TEST_ASSERT_EQUAL_UINT8(100U, adapter.getMultiplier());
     TEST_ASSERT_EQUAL(AdaptDecision::Hold, adapter.getLastDecision());
+}
+
+/** @brief Feed one window of a sine wave error. Returns the multiplier after it. */
+static uint8_t runSine(int16_t amplitude, uint32_t periodMs, uint32_t sampleMs, uint16_t band)
+{
+    GainAdapter adapter;
+    gainAdaptConfig_t config = makeConfig();
+    config.band = band;
+    for (uint32_t nowMs = 0U; nowMs <= WINDOW_MS; nowMs += sampleMs)
+    {
+        const float phase = 6.2831853f * (float)(nowMs % periodMs) / (float)periodMs;
+        const int16_t error = (int16_t)floorf(((float)amplitude * sinf(phase)) + 0.5f);
+        (void)adapter.sample(error, true, nowMs, config);
+    }
+    return adapter.getMultiplier();
+}
+
+// Hunting is a smooth wave, not a square one: it must still be seen with a period of a few samples
+static void test_adapt_lowers_sine_hunting(void)
+{
+    // Idle: a sample every 250mS, 25 RPM band
+    TEST_ASSERT_EQUAL_UINT8(95U, runSine(60, 1500U, 250U, 25U));
+    TEST_ASSERT_EQUAL_UINT8(95U, runSine(60, 2000U, 250U, 25U));
+    TEST_ASSERT_EQUAL_UINT8(95U, runSine(60, 2500U, 250U, 25U));
+    TEST_ASSERT_EQUAL_UINT8(95U, runSine(40, 2000U, 250U, 25U));
+    // AFR: a step every 125mS, 0.2 AFR band
+    TEST_ASSERT_EQUAL_UINT8(95U, runSine(5, 1000U, 125U, 2U));
+    TEST_ASSERT_EQUAL_UINT8(95U, runSine(3, 1500U, 125U, 2U));
+    // Inside the band: kept
+    TEST_ASSERT_EQUAL_UINT8(100U, runSine(20, 2000U, 250U, 25U));
+}
+
+// The loop stops (E.g. the AFR closed loop leaves its window): when it comes back, the window starts again
+static void test_adapt_gap_restarts_the_window(void)
+{
+    GainAdapter adapter;
+    const gainAdaptConfig_t config = makeConfig();
+    uint32_t nowMs = 0U;
+    for (; nowMs < 10000UL; nowMs += SAMPLE_MS) { (void)adapter.sample(offTarget(0U), true, nowMs, config); }
+
+    // 3S without samples
+    nowMs += 3000UL;
+    const uint32_t restartMs = nowMs;
+    for (; nowMs < (restartMs + WINDOW_MS); nowMs += SAMPLE_MS) { (void)adapter.sample(offTarget(0U), true, nowMs, config); }
+    TEST_ASSERT_EQUAL_UINT8(100U, adapter.getMultiplier());
+    (void)adapter.sample(offTarget(0U), true, nowMs, config);
+    TEST_ASSERT_EQUAL_UINT8(105U, adapter.getMultiplier());
 }
 
 static void test_adapt_ignores_noise(void)
@@ -188,6 +236,8 @@ void testGainAdapter(void)
     RUN_TEST_P(test_adapt_raises_when_off_target);
     RUN_TEST_P(test_adapt_holds_on_target);
     RUN_TEST_P(test_adapt_ignores_noise);
+    RUN_TEST_P(test_adapt_lowers_sine_hunting);
+    RUN_TEST_P(test_adapt_gap_restarts_the_window);
     RUN_TEST_P(test_adapt_reports_a_change);
     RUN_TEST_P(test_adapt_limits);
     RUN_TEST_P(test_adapt_unsteady_restarts_the_window);
