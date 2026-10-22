@@ -6,6 +6,7 @@
 #include "src/pins/outputPin.h"
 #include "src/pwm/PwmOutputChannel.h"
 #include "src/pwm/interruptHandlers.h"
+#include "../sensorFault/sensorFaultController.h"
 
 TESTABLE_CONSTEXPR table2D_u8_u8_4 fanPWMTable(&configPage6.fanPWMBins, &configPage9.PWMFanDuty);
 using fanPwmChannel_t = PwmOutputChannel<invertableOutputPinAdaper_t<outputPin_t>>;
@@ -118,6 +119,12 @@ static uint8_t calculateDuty(const statuses &current, const config2 &page2, cons
     // Unknown mode
   }
 #endif
+
+  // Fork: with the coolant sensor faulted the real temperature is unknown, so run the fan (whenever the fan may run)
+  if ((page2.fanEnable != FANMODE_OFF) && sensorFaultForcesFan(current, page15) && isFanPermitted(current, page2))
+  {
+    duty = 200U;
+  }
 
   return duty;
 }

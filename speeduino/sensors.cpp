@@ -29,6 +29,7 @@ A full copy of the license may be found in the projects root directory
 #include "src/pins/boardInputPin.h"
 #include "src/pins/pinMapping.h"
 #include "src/controllers/oilTemp/oilTempController.h"
+#include "src/controllers/sensorFault/sensorFaultController.h"
 
 uint8_t statusSensors = 0;
 
@@ -481,8 +482,10 @@ static inline uint16_t readFilteredMapADC(uint8_t pin, uint8_t alpha, uint16_t p
 }
 
 static inline map_adc_readings_t readMapSensors(const map_adc_readings_t &previousReadings, const config4 &page4, bool useEMAP) {
+  uint16_t mapReading = readMAPSensor(pinNumbers.pinMAP);
+  sensorFaultMapSample(mapReading); // Fork: out of range readings are dropped below, and they are what the fault detection needs
   return {
-    readFilteredMapADC(pinNumbers.pinMAP, page4.ADCFILTER_MAP, previousReadings.mapADC),
+    validateFilterMapSensorReading(mapReading, page4.ADCFILTER_MAP, previousReadings.mapADC),
     (uint16_t)(useEMAP ? readFilteredMapADC(pinNumbers.pinEMAP, page4.ADCFILTER_MAP, previousReadings.emapADC) : UINT16_MAX)
   };
 }
@@ -557,6 +560,7 @@ static inline void readMAP(void)
 
     // Convert from filtered sensor readings to kPa
     setMAPValuesFromReadings(mapAlgorithmState.sensorReadings, configPage2, configPage6.useEMAP, currentStatus);
+    currentStatus.MAP = sensorFaultMap(currentStatus.MAP, currentStatus, configPage15); // Fork: fixed value while the sensor is faulted
   }
 }
 
@@ -598,6 +602,10 @@ static inline void readTPS(uint8_t tpsADC)
   tpsADC = clamp(tpsADC, tempTPSMin, tempTPSMax);
   currentStatus.TPS = map(tpsADC, tempTPSMin, tempTPSMax, 0, 200); //Take the raw TPS ADC value and convert it into a TPS% based on the calibrated values
 
+  // Fork: a faulted sensor reads a fixed value, and no throttle movement
+  currentStatus.TPS = sensorFaultTps(currentStatus.TPS, currentStatus, configPage15);
+  if (BIT_CHECK(currentStatus.sensorFaults, SENSOR_FAULT_TPS)) { currentStatus.TPSlast = currentStatus.TPS; }
+
   //Check whether the closed throttle position sensor is active
   currentStatus.CTPSActive = configPage2.CTPSEnabled == true && isCTPSSensorActive();
 }
@@ -612,21 +620,39 @@ void initialiseTPS(void) {
   readTPS((uint8_t)fastMap10Bit(readAnalogSensor(pinNumbers.pinTPS), 0U, 255U)); // Need to read tps to detect flood clear state
 }
 
+// Fork: the fallback value replaces the reading while the sensor is faulted
+static inline void setCoolantFromADC(void)
+{
+  //Temperature calibration values are stored as positive bytes. We subtract 40 from them to allow for negative temperatures
+  currentStatus.coolant = sensorFaultCoolant(temperatureRemoveOffset(table2D_getValue(&cltCalibrationTable, currentStatus.cltADC)), currentStatus, configPage15);
+}
+
 static inline void readCLT(void)
 {
   currentStatus.cltADC = LOW_PASS_FILTER(readAnalogSensor(pinNumbers.pinCLT), configPage4.ADCFILTER_CLT, currentStatus.cltADC);
-  currentStatus.coolant = temperatureRemoveOffset(table2D_getValue(&cltCalibrationTable, currentStatus.cltADC)); //Temperature calibration values are stored as positive bytes. We subtract 40 from them to allow for negative temperatures
+  setCoolantFromADC();
 }
 
 void initialiseCLT(void) {
   currentStatus.cltADC = readAnalogSensor(pinNumbers.pinCLT);
-  currentStatus.coolant = temperatureRemoveOffset(table2D_getValue(&cltCalibrationTable, currentStatus.cltADC)); //Temperature calibration values are stored as positive bytes. We subtract 40 from them to allow for negative temperatures
+  setCoolantFromADC();
+}
+
+static inline void setIATFromADC(void)
+{
+  currentStatus.IAT = sensorFaultIat(temperatureRemoveOffset(table2D_getValue(&iatCalibrationTable, currentStatus.iatADC)), currentStatus, configPage15);
 }
 
 static inline void readIAT(void)
 {
   currentStatus.iatADC = LOW_PASS_FILTER(readAnalogSensor(pinNumbers.pinIAT), configPage4.ADCFILTER_IAT, currentStatus.iatADC);
-  currentStatus.IAT = temperatureRemoveOffset(table2D_getValue(&iatCalibrationTable, currentStatus.iatADC));
+  setIATFromADC();
+}
+
+// Fork specific. Seeds the filter, which otherwise ramps up from 0 (a short, as far as the fault detection goes)
+void initialiseIAT(void) {
+  currentStatus.iatADC = readAnalogSensor(pinNumbers.pinIAT);
+  setIATFromADC();
 }
 
 // ========================================== Baro ==========================================
@@ -652,9 +678,11 @@ static inline void setBaroFromSensorReading(uint16_t sensorReading)
 }
 
 // Should only be called when the engine isn't running.
-static inline void setBaroFromMAP(void) 
+static inline void setBaroFromMAP(void)
 {
-  uint16_t tempReading = mapADCToMAP(readMAPSensor(pinNumbers.pinMAP), configPage2.mapMin, configPage2.mapMax);
+  uint16_t mapReading = readMAPSensor(pinNumbers.pinMAP);
+  sensorFaultMapSample(mapReading); // Fork: the first reading, before the engine runs
+  uint16_t tempReading = mapADCToMAP(mapReading, configPage2.mapMin, configPage2.mapMax);
   if (isValidBaro(tempReading)) //Safety check to ensure the baro reading is within the physical limits
   {
     currentStatus.baro = tempReading;

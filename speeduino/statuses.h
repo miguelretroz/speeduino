@@ -303,6 +303,7 @@ struct statuses {
   byte gear;         /**< Current gear (Calculated from vss) */
   byte fuelPressure; /**< Fuel pressure in PSI */
   byte oilPressure;  /**< Oil pressure in PSI */
+  uint8_t sensorFaults; /**< Fork specific: one bit per faulted sensor (see sensorFaultController.h) */
 
   /** @brief Engine protection status fields. */
   struct engine_protect_flags_t

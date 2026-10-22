@@ -43,7 +43,7 @@ static void test_pidtune_defaults_on_fresh_eeprom(void)
     doForkUpdates(configPage15);
 
     assert_pidtune_defaults();
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V4, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
     // The gain adaptation starts at 100%
     TEST_ASSERT_EQUAL_UINT8(100U, fakeForkStorage.pidAdaptIdle);
     TEST_ASSERT_EQUAL_UINT8(100U, fakeForkStorage.pidAdaptEgo);
@@ -68,7 +68,7 @@ static void test_v3_upgrade_adds_pidtune_defaults(void)
     doForkUpdates(configPage15);
 
     assert_pidtune_defaults();
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V4, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
     // Whatever was in the EEPROM before, the gain adaptation starts at 100%
     TEST_ASSERT_EQUAL_UINT8(100U, fakeForkStorage.pidAdaptIdle);
     TEST_ASSERT_EQUAL_UINT8(100U, fakeForkStorage.pidAdaptEgo);
@@ -101,8 +101,8 @@ static void test_pidtune_ini_offsets(void)
     const uint8_t *pBase = (const uint8_t*)&configPage15;
 
     TEST_ASSERT_EQUAL(256U - CONFIG15_PAGE_OFFSET, sizeof(config15));
-    TEST_ASSERT_EQUAL(106U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.Unused15_106_185 - pBase);
-    TEST_ASSERT_EQUAL(80U, sizeof(configPage15.Unused15_106_185));
+    TEST_ASSERT_EQUAL(106U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.Unused15_106_171 - pBase);
+    TEST_ASSERT_EQUAL(66U, sizeof(configPage15.Unused15_106_171));
     TEST_ASSERT_EQUAL(186U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.pidAdaptEgoBand - pBase);
     TEST_ASSERT_EQUAL(187U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.pidAdaptIdleBand - pBase);
     TEST_ASSERT_EQUAL(188U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.pidAdaptWindow - pBase);

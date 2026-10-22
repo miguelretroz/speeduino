@@ -41,6 +41,7 @@
 #include "src/controllers/coldStart/coldStartController.h"
 #include "src/controllers/oilTemp/oilTempController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
+#include "src/controllers/sensorFault/sensorFaultController.h"
 #include "fork_updates.h"
 
 #if defined(CORE_AVR)
@@ -254,6 +255,9 @@ void initialiseAll(void)
     interrupts();
     initialiseCLT();
     initialiseTPS();
+    initialiseIAT();
+    // Fork: must follow the first sensor reads above and initialiseMAPBaro()
+    initialiseSensorFaults(currentStatus, configPage15);
     initialiseTachoControl(pinNumbers.pinTachOut, configPage2, configPage6, currentStatus);
 
     currentStatus.initialisationComplete = true;

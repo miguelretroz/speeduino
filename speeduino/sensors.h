@@ -51,6 +51,9 @@ void initialiseTPS(void);
 /** @brief Initial reading of the coolant sensor, primarily to make sure the priming pulsewidth is correct */
 void initialiseCLT(void);
 
+/** @brief Initial reading of the air temperature sensor, so its filter doesn't ramp up from 0. Fork specific. */
+void initialiseIAT(void);
+
 #define TPS_READ_FREQUENCY  30 //ONLY VALID VALUES ARE 15 or 30!!!
 
 /** @brief Define the TPS sensor read frequency. */

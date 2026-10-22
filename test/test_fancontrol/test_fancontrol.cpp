@@ -1,4 +1,5 @@
 #include "src/controllers/fan/fanController.h"
+#include "src/controllers/sensorFault/sensorFaultController.h"
 #include "units.h"
 #include "../test_utils.h"
 #include "shared.h"
@@ -312,6 +313,66 @@ static void test_fanControl_pwm_aircon_request_turns_fan_on(void)
 #endif
 }
 
+// Fork: a faulted coolant sensor runs the fan (the real temperature is unknown)
+static void test_fanControl_nopwm_coolant_sensor_fault_turns_fan_on(void)
+{
+  auto context = setup_nopwm_tune();
+  context.page15.sensorFaultFan = 1U;
+  context.initialise();
+  setup_status_fanoff(context);
+  context.current.rotationStatus = EngineRotationStatus::Running;
+  context.current.sensorFaults = 1U << SENSOR_FAULT_CLT;
+
+  context.fanControl();
+  assert_nopwm_fan_pin_state(context, true);
+
+  // Back to normal once the fault clears (coolant is below the hysteresis band)
+  context.current.sensorFaults = 0U;
+  context.fanControl();
+  assert_nopwm_fan_pin_state(context, false);
+}
+
+static void test_fanControl_nopwm_coolant_sensor_fault_respects_option_and_permission(void)
+{
+  auto context = setup_nopwm_tune();
+  context.initialise();
+  setup_status_fanoff(context);
+  context.current.rotationStatus = EngineRotationStatus::Running;
+  context.current.sensorFaults = 1U << SENSOR_FAULT_CLT;
+
+  // Option off
+  context.page15.sensorFaultFan = 0U;
+  context.fanControl();
+  assert_nopwm_fan_pin_state(context, false);
+
+  // Option on, but the engine is stopped and the fan may not run then
+  context.page15.sensorFaultFan = 1U;
+  context.current.rotationStatus = EngineRotationStatus::Stopped;
+  context.fanControl();
+  assert_nopwm_fan_pin_state(context, false);
+
+  // Other sensors don't force the fan
+  context.current.rotationStatus = EngineRotationStatus::Running;
+  context.current.sensorFaults = 1U << SENSOR_FAULT_MAP;
+  context.fanControl();
+  assert_nopwm_fan_pin_state(context, false);
+}
+
+static void test_fanControl_pwm_coolant_sensor_fault_turns_fan_on(void)
+{
+#if defined(PWM_FAN_AVAILABLE)
+  auto context = setup_pwm_tune();
+  context.page15.sensorFaultFan = 1U;
+  context.initialise();
+  setup_status_fanoff(context);
+  context.current.rotationStatus = EngineRotationStatus::Running;
+  context.current.sensorFaults = 1U << SENSOR_FAULT_CLT;
+
+  context.fanControl();
+  TEST_ASSERT_EQUAL(200, context.current.fanDuty);
+#endif
+}
+
 static void assert_cranking_overrides_hysteresis(bool inverted)
 {
   auto context = setup_nopwm_tune();
@@ -405,5 +466,8 @@ void tesFanControl(void)
     RUN_TEST_P(test_fanControl_pwm_runs_during_crank_when_permitted);
     RUN_TEST_P(test_fanControl_nopwm_aircon_request_turns_fan_on);
     RUN_TEST_P(test_fanControl_pwm_aircon_request_turns_fan_on);
+    RUN_TEST_P(test_fanControl_nopwm_coolant_sensor_fault_turns_fan_on);
+    RUN_TEST_P(test_fanControl_nopwm_coolant_sensor_fault_respects_option_and_permission);
+    RUN_TEST_P(test_fanControl_pwm_coolant_sensor_fault_turns_fan_on);
   }
 }

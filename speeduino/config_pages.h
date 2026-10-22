@@ -924,8 +924,29 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-185
-  byte Unused15_106_185[80];
+  //Bytes 106-171
+  byte Unused15_106_171[66];
+
+  //Bytes 172-185 - Fork specific: sensor fault detection (see sensorFaultController.h). Allocated from the end of the free area.
+  byte tpsFailsafe;         ///< TPS used while the sensor is faulted (Unit: 1%)
+  byte mapFailsafe;         ///< MAP used while the sensor is faulted (Unit: 1kPa)
+  byte iatFailsafe;         ///< Air temperature used while the sensor is faulted (+40 offset)
+  byte cltFailsafe;         ///< Coolant temperature used while the sensor is faulted (+40 offset)
+  byte tpsFaultHigh;        ///< Readings above this are a fault (Unit: ADC/4, 0.0195V)
+  byte tpsFaultLow;         ///< Readings below this are a fault (Unit: ADC/4, 0.0195V)
+  byte mapFaultHigh;
+  byte mapFaultLow;
+  byte iatFaultHigh;
+  byte iatFaultLow;
+  byte cltFaultHigh;
+  byte cltFaultLow;
+  byte sensorFaultDelay;    ///< Time out of range before a fault, and back in range before it clears (Unit: 0.1S)
+  byte sensorFaultClt : 1;  ///< Detect coolant sensor faults
+  byte sensorFaultIat : 1;  ///< Detect air temperature sensor faults
+  byte sensorFaultMap : 1;  ///< Detect MAP sensor faults
+  byte sensorFaultTps : 1;  ///< Detect TPS faults
+  byte sensorFaultFan : 1;  ///< Run the fan while the coolant sensor is faulted
+  byte sensorFaultUnused : 3;
 
   //Bytes 186-255 - Fork specific features.
   //Allocated from the end of the page to stay clear of upstream additions: new fields go *before* the existing ones.
