@@ -1,6 +1,6 @@
 # Auto-tune e adaptação do PID (lenta e lambda)
 
-Tela no TunerStudio: **Accessories → PID Auto Tune (idle / AFR)**.
+Telas no TunerStudio: **Accessories → PID Auto Tune (idle / AFR)** (o ensaio) e **Accessories → PID Gain Adaptation (idle / AFR)** (a adaptação contínua).
 
 O auto-tune faz um ensaio curto com o motor ligado: move a válvula da lenta (ou a correção de combustível do lambda) um pouco para cima e para baixo em volta de onde ela está, mede como o motor responde (o período e o tamanho da oscilação) e calcula P, I e D. **Nada muda no acerto até você apertar "Apply Result".**
 
@@ -9,13 +9,13 @@ A adaptação contínua (opcional, uma chave para a lenta e outra para o lambda)
 ## Antes de começar
 
 - Grave o firmware da branch `feat/pid-autotune` e use o INI dela (`reference/speeduino.ini`). Na primeira partida a ECU cria os padrões novos sozinha (versão de config do fork v4); nada do acerto atual muda.
-- **Lenta:** precisa estar num modo closed loop. O recomendado é o **modo 7, "Stepper OL+CL"**: a tabela de passos que você já tem vira a base e o PID só corrige a diferença. Em Idle → Idle Control, mude "Idle control type" para *Stepper OL+CL*. Os ganhos atuais (P 0,03 / I 0,09 / D 0) servem para começar.
-- **Lambda:** precisa da sonda wideband e do algoritmo **PID** (em Fuel → AFR/O2, "Algorithm"). Hoje está em *No correction*.
+- **Lenta:** precisa estar num modo closed loop. O recomendado é o **modo 7, "Stepper OL+CL"**: a tabela de passos que você já tem vira a base e o PID só corrige a diferença. Em Startup/Idle → Idle Control, mude "Idle control type" para *Stepper OL+CL*. Os ganhos atuais (P 0,03 / I 0,09 / D 0) servem para começar.
+- **Lambda:** precisa da sonda wideband e do algoritmo **PID** (em Tuning → AFR/O2, "Algorithm"). Hoje está em *No correction*.
 
 ## Lenta, passo a passo
 
 1. Motor quente (acima da temperatura de fim do enriquecimento de aquecimento), em ponto morto, **A/C e ventoinha desligados**, sem encostar no acelerador.
-2. Abra a tela PID Auto Tune e aperte **Tune Idle**.
+2. Abra a tela PID Auto Tune e aperte **Tune Idle**. Se o botão estiver cinza, uma linha vermelha logo abaixo diz o que falta (modo da lenta ou do lambda).
 3. Os primeiros 3 s a válvula fica parada (a ECU mede a rotação média). Depois a rotação começa a oscilar uns ±30–80 RPM, com período de 1 a 4 s. O gráfico "Idle" mostra isso.
 4. Em 20 s a 1 minuto aparece **DONE** e os valores sugeridos de P, I e D. Dá para trocar a "Tuning Rule" agora: os valores são recalculados na hora com as mesmas medidas, sem refazer o ensaio.
 5. Aperte **Apply Result**. A ECU grava só P, I e D (outras mudanças que você não gravou ficam como estão) e o TunerStudio recarrega a página sozinho (os campos de Idle mudam). Observe a lenta por um minuto. O Apply só vale para o mesmo modo de lenta em que o ensaio foi feito.
@@ -33,6 +33,8 @@ Acelerador acima de 3 % (ou do "Integral reset above TPS", se for menor), ligar 
 Se o ensaio do lambda for feito na lenta, o resultado vale melhor para a lenta. A adaptação (abaixo) corrige aos poucos para as outras condições.
 
 ## Se der falha
+
+Na tela, FAILED acende em "Status" e o motivo acende em vermelho na coluna "If The Test Fails".
 
 | Indicador | O que fazer |
 |---|---|
@@ -54,10 +56,11 @@ Se o ensaio do lambda for feito na lenta, o resultado vale melhor para a lenta. 
 - **Idle RPM Band**: quanto a rotação precisa passar do alvo para a válvula inverter. Um pouco acima do ruído de RPM da lenta. Padrão 15.
 - **AFR Correction Swing / AFR Band**: o mesmo para o lambda. Padrões 5 % e 0,1 AFR.
 - **Cycles To Average / Give Up After**: ciclos medidos (2–4) e tempo máximo do ensaio.
+- **Gains In The Tune Now**: os P, I e D que estão no acerto (os mesmos campos de Idle Control e AFR/O2), para comparar com os sugeridos. Depois do Apply eles mudam sozinhos.
 
 ## Adaptação contínua
 
-- Ligue em "Continuous Gain Adaptation": **Idle** e/ou **AFR**.
+- Na tela PID Gain Adaptation, ligue **Idle** e/ou **AFR**. Os indicadores mostram, para cada malha, se uma janela estável está sendo medida (WATCHING) e o que a última janela fez (LOWERED ou RAISED).
 - A cada janela (padrão 15 s) com a malha em regime, olha o erro: se ele cruza a banda de um lado para o outro 4 vezes ou mais (cada lado só conta depois de 2 amostras seguidas, para o ruído não contar como oscilação), os ganhos baixam 5 %; se ele fica fora do alvo em média sem cruzar, sobem 5 %. Fica entre 50 % e 150 % dos valores dos campos.
 - Só conta com a malha em regime: acelerador fechado (lenta) e sem transiente de acelerador (lambda), sem DFCO, sem A/C, ventoinha ou idle-up mudando, e sem a saída do PID no limite. No lambda, uma janela recomeça se a rotação mudar mais de 15 %.
 - O multiplicador aparece nos medidores e no datalog ("Idle/AFR PID Gain Adaptation"), fica gravado na EEPROM (depois de 1 minuto sem mudar, no máximo a cada 10 minutos, ou quando o motor para com a chave ligada) e volta a 100 % quando você muda P, I ou D, aplica um auto-tune ou aperta Reset.
