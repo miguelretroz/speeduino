@@ -65,6 +65,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "src/controllers/coldStart/coldStartController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
 #include "src/controllers/sensorFault/sensorFaultController.h"
+#include "src/controllers/protection/protectionController.h"
 
 #define CRANK_RUN_HYSTER    15
 
@@ -303,6 +304,8 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
 
       // Fork: sensors stuck at an electrical limit are faulted and read a safe value
       sensorFaultControl(currentStatus, configPage15);
+      // Fork: the time based protection conditions, the protection memory and the warning output
+      protectionControl(currentStatus, configPage6, configPage10, configPage15);
 
       // Fork: PID auto tune conditions and timeouts. Runs before the idle control below, in the same loop.
       pidTuneControl(currentStatus, configPage2, configPage6, configPage15);
@@ -413,6 +416,8 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
         }
 
       currentStatus.engineProtect = checkEngineProtection(currentStatus, configPage4, configPage6, configPage9, configPage10);
+      // Fork: an action per protection (limit the RPM, warn only or stop the engine), with memory
+      protectionResolve(currentStatus, configPage6, configPage15);
       //END SETTING ENGINE STATUSES
       //-----------------------------------------------------------------------------------------------------
 

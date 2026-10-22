@@ -42,6 +42,7 @@
 #include "src/controllers/oilTemp/oilTempController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
 #include "src/controllers/sensorFault/sensorFaultController.h"
+#include "src/controllers/protection/protectionController.h"
 #include "fork_updates.h"
 
 #if defined(CORE_AVR)
@@ -189,6 +190,7 @@ void initialiseAll(void)
     initialiseAirCon(currentStatus, configPage15, pinNumbers);
     initialiseColdStart(currentStatus, configPage15, pinNumbers);
     initialiseOilTemp(configPage15, pinNumbers);
+    initialiseProtection(configPage15, pinNumbers);
     initialiseNitrous();
     initialiseVvtWmi(currentStatus, pinNumbers, configPage4, configPage6, configPage10);
     initialiseCorrections();
@@ -322,6 +324,9 @@ void setPinMapping(byte boardID)
   // Oil temperature input and hot oil alert output
   if (configPage15.oilTempEnable != 0) { pinNumbers.pinOilTemp = getOilTempInputPin(configPage15.oilTempPin); }
   if ((configPage15.oilTempAlertPin != 0) && (configPage15.oilTempAlertPin < BOARD_MAX_IO_PINS) ) { pinNumbers.pinOilTempAlert = pinTranslate(configPage15.oilTempAlertPin); }
+
+  // Engine protection warning output
+  if ((configPage15.protWarnPin != 0) && (configPage15.protWarnPin < BOARD_MAX_IO_PINS) ) { pinNumbers.pinProtectWarn = pinTranslate(configPage15.protWarnPin); }
     
   /* Reset control is a special case. If reset control is enabled, it needs its initial state set BEFORE its pinMode.
      If that doesn't happen and reset control is in "Serial Command" mode, the Arduino will end up in a reset loop

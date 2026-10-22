@@ -126,6 +126,11 @@ uint8_t getOilTempLogValue(void)
   return oilTempState.hasReading ? temperatureAddOffset(oilTempState.temperature) : 0U;
 }
 
+bool isOilTempHot(void)
+{
+  return oilTempState.isHot;
+}
+
 uint8_t getOilTempLogStatus(void)
 {
   return (uint8_t)((oilTempState.isHot ? 1U : 0U) | ((oilTempState.isFault ? 1U : 0U) << 1U));

@@ -22,6 +22,9 @@ void oilTempControl(const config15 &page15, uint16_t adc);
 /** @brief Oil temperature for the live data/log, with the +40 offset used by all temperatures */
 uint8_t getOilTempLogValue(void);
 
+/** @brief The hot oil alert is on (never with a faulted sensor) */
+bool isOilTempHot(void);
+
 /**
  * @brief Oil temperature status byte for the live data/log
  *

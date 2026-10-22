@@ -15,6 +15,7 @@
 #include "src/controllers/oilTemp/oilTempController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
 #include "src/controllers/sensorFault/sensorFaultController.h"
+#include "src/controllers/protection/protectionController.h"
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
 {
@@ -387,6 +388,8 @@ byte getTSLogEntry(uint16_t byteNum)
     case 155: statusValue = getPidTuneLogByte(13U); break;
     case 156: statusValue = getPidTuneLogByte(14U); break;
     case 157: statusValue = getSensorFaultLogStatus(currentStatus, configPage15); break; // Fork specific
+    case 158: statusValue = getProtectionLogReason(); break; // Fork specific
+    case 159: statusValue = getProtectionLogState(); break; // Fork specific
     default: statusValue = 0; // MISRA check
   }
 

@@ -924,8 +924,31 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-171
-  byte Unused15_106_171[66];
+  //Bytes 106-162
+  byte Unused15_106_162[57];
+
+  //Bytes 163-171 - Fork specific: engine protection actions, memory and warning output (see protectionController.h)
+  byte protWarnPin : 6;             ///< Warning output (light/buzzer), on while a protection or a sensor fault is active. 0 = none
+  byte protUnused1 : 2;
+  byte protFuelPressRpm;            ///< The fuel pressure is only checked at or above this RPM (Unit: 100 RPM)
+  byte protFuelPressDelay;          ///< Time below the minimum before the protection acts (Unit: 0.1S)
+  byte protFuelPressMin;            ///< Minimum fuel pressure across the injectors (Unit: 1 PSI)
+  byte protCoolantHot;              ///< Temperature of the hot coolant protection (+40 offset)
+  byte protCoolantHotEnable : 1;
+  byte protOilHotEnable : 1;        ///< The hot oil alert (oilTempController.h) is a protection too
+  byte protFuelPressEnable : 1;
+  byte protSensorFaultEnable : 1;   ///< A sensor fault (sensorFaultController.h) is a protection too
+  byte protWarnInv : 1;             ///< Warning output polarity
+  byte protUnused2 : 3;
+  byte protLatch;                   ///< Memory, one bit per condition (PROTECT_*): the action is kept until the engine stops
+  byte protActionOilHot : 2;        ///< ProtectAction
+  byte protActionFuelPress : 2;
+  byte protActionSensorFault : 2;
+  byte protUnused3 : 2;
+  byte protActionOilPress : 2;
+  byte protActionBoost : 2;
+  byte protActionAfr : 2;
+  byte protActionCoolantHot : 2;
 
   //Bytes 172-185 - Fork specific: sensor fault detection (see sensorFaultController.h). Allocated from the end of the free area.
   byte tpsFailsafe;         ///< TPS used while the sensor is faulted (Unit: 1%)

@@ -203,7 +203,12 @@ TESTABLE_INLINE_STATIC uint8_t getHardRevLimit(const statuses &current, const co
 
 TESTABLE_INLINE_STATIC uint8_t applyEngineProtectionRevLimit(uint8_t curLimit, const statuses &current, const config4 &page4)
 {
-  if ((current.engineProtect.boostCut) || (current.engineProtect.oil) || (current.engineProtect.afr))
+  // Fork: a protection set to stop the engine cuts at any RPM (see protectionController.h)
+  if (current.engineProtect.forkStop)
+  {
+    return 0U;
+  }
+  if ((current.engineProtect.boostCut) || (current.engineProtect.oil) || (current.engineProtect.afr) || (current.engineProtect.forkLimit))
   {
     return (std::min)(curLimit, page4.engineProtectMaxRPM);
   }

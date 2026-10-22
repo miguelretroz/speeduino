@@ -318,6 +318,10 @@ struct statuses {
     bool oil : 1; ///< true if the oil limit has been breached, false otherwise
     // cppcheck-suppress misra-c2012-6.1 ; False positive - MISRA C:2012 Rule (R 6.1) permits the use of boolean for bit fields.
     bool afr : 1; ///< true if the afr limit has been breached, false otherwise
+    // cppcheck-suppress misra-c2012-6.1 ; False positive - MISRA C:2012 Rule (R 6.1) permits the use of boolean for bit fields.
+    bool forkLimit : 1; ///< Fork specific: a protection set to limit the RPM is active (see protectionController.h)
+    // cppcheck-suppress misra-c2012-6.1 ; False positive - MISRA C:2012 Rule (R 6.1) permits the use of boolean for bit fields.
+    bool forkStop : 1; ///< Fork specific: a protection set to stop the engine is active
 
     /** @brief Are any protections active */
     // cppcheck-suppress misra-c2012-8.10 ; False positive - cannot make this static
@@ -327,6 +331,8 @@ struct statuses {
             || boostCut
             || oil
             || afr
+            || forkLimit
+            || forkStop
             ;
     }
 
@@ -338,7 +344,9 @@ struct statuses {
       oil = false;
       afr = false;
       coolant = false;
-    }  
+      forkLimit = false;
+      forkStop = false;
+    }
   };
   engine_protect_flags_t engineProtect;
   // cppcheck-suppress misra-c2012-6.1 ; False positive - MISRA C:2012 Rule (R 6.1) permits the use of boolean for bit fields.

@@ -68,7 +68,8 @@ bool pinIsOutput(byte pin)
   || ((pin == pinNumbers.pinAirConComp) && (configPage15.airConEnable > 0))
   || ((pin == pinNumbers.pinAirConFan) && (configPage15.airConEnable > 0) && (configPage15.airConFanEnabled > 0))
   || ((pin == pinNumbers.pinColdStart) && (configPage15.coldStartEnable > 0))
-  || ((pin == pinNumbers.pinOilTempAlert) && (configPage15.oilTempEnable > 0) && (configPage15.oilTempAlertOutput > 0)) )
+  || ((pin == pinNumbers.pinOilTempAlert) && (configPage15.oilTempEnable > 0) && (configPage15.oilTempAlertOutput > 0))
+  || ((pin == pinNumbers.pinProtectWarn) && (configPage15.protWarnPin > 0)) )
   {
     used = true;
   }

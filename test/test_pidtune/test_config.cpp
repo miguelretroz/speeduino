@@ -101,8 +101,8 @@ static void test_pidtune_ini_offsets(void)
     const uint8_t *pBase = (const uint8_t*)&configPage15;
 
     TEST_ASSERT_EQUAL(256U - CONFIG15_PAGE_OFFSET, sizeof(config15));
-    TEST_ASSERT_EQUAL(106U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.Unused15_106_171 - pBase);
-    TEST_ASSERT_EQUAL(66U, sizeof(configPage15.Unused15_106_171));
+    TEST_ASSERT_EQUAL(106U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.Unused15_106_162 - pBase);
+    TEST_ASSERT_EQUAL(57U, sizeof(configPage15.Unused15_106_162));
     TEST_ASSERT_EQUAL(186U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.pidAdaptEgoBand - pBase);
     TEST_ASSERT_EQUAL(187U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.pidAdaptIdleBand - pBase);
     TEST_ASSERT_EQUAL(188U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.pidAdaptWindow - pBase);

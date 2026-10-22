@@ -111,4 +111,5 @@ struct pinNumbers_t
   uint8_t pinColdStart = NOT_A_PIN;     // Cold start auxiliary fuel system output (pump + valve)
   uint8_t pinOilTemp = NOT_A_PIN;       // Oil temperature sensor input (analog)
   uint8_t pinOilTempAlert = NOT_A_PIN;  // Hot oil alert output (light/buzzer)
+  uint8_t pinProtectWarn = NOT_A_PIN;   // Engine protection warning output (light/buzzer)
 };
