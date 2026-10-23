@@ -9,6 +9,7 @@
 #include "../../../corrections.h"
 #include "../../../storage.h"
 #include "../../../pages.h"
+#include "../../../page_crc.h"
 #include "../../../maths.h"
 #include "../../../units.h"
 #include "../../../unit_testing.h"
@@ -331,6 +332,7 @@ static void applyResult(config6 &page6)
 
     if (pidTuneState.tuner.getPhase() == TunePhase::Done)
     {
+      invalidatePageCRC32(afrSetPage);
       // TunerStudio doesn't burn values it reloads from the controller: burn them here, and only them (the rest of
       // the page may have changes not burned yet). Then ask TunerStudio to reload the page.
       const byte *pGains = (pidTuneState.loop == TuneLoop::Idle) ? &page6.idleKP : &page6.egoKP;

@@ -653,7 +653,7 @@ void processSerialCommand(void)
 
     case 'd': // Send a CRC32 hash of a given page
     {
-      uint32_t CRC32_val = reverse_bytes(calculatePageCRC32( serialPayload[2] ));
+      uint32_t CRC32_val = reverse_bytes(getPageCRC32( serialPayload[2] ));
 
       serialPayload[0] = SERIAL_RC_OK;
       (void)memcpy(&serialPayload[1], (byte*)&CRC32_val, sizeof(CRC32_val));

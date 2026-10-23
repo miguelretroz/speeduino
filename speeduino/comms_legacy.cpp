@@ -117,7 +117,7 @@ void legacySerialCommand(void)
       if (primarySerial.available() >= 2)
       {
         primarySerial.read(); //Ignore the first byte value, it's always 0
-        uint32_t CRC32_val = calculatePageCRC32( primarySerial.read() );
+        uint32_t CRC32_val = getPageCRC32( primarySerial.read() );
         
         //Split the 4 bytes of the CRC32 value into individual bytes and send
         primarySerial.write( ((CRC32_val >> 24) & 255) );
@@ -493,6 +493,7 @@ void legacySerialCommand(void)
 
       if (primarySerial.available() >= 1) {
         configPage4.bootloaderCaps = primarySerial.read();
+        invalidatePageCRC32(ignSetPage);
         serialStatusFlag = SERIAL_INACTIVE;
       }
       break;
@@ -566,7 +567,7 @@ void legacySerialHandler(byte cmd, Stream &targetPort, SerialStatus &targetStatu
       if (targetPort.available() >= 2)
       {
         targetPort.read(); //Ignore the first byte value, it's always 0
-        uint32_t CRC32_val = calculatePageCRC32( targetPort.read() );
+        uint32_t CRC32_val = getPageCRC32( targetPort.read() );
         
         //Split the 4 bytes of the CRC32 value into individual bytes and send
         targetPort.write( ((CRC32_val >> 24) & 255) );

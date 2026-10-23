@@ -50,6 +50,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "preprocessor.h"
 #include "dwell.h"
 #include "decoder_init.h"
+#include "page_crc.h"
 #include "src/pins/pinMapping.h"
 #include "resetControl.h"
 #include "scheduler_ignition_controller.h"
@@ -191,6 +192,12 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
         serialReceive();
       }
       
+      // Keep the page CRCs (TS 'd' command) cached, so a request never calculates a whole page in the loop
+      if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_1KHZ))
+      {
+        refreshPageCRC32(PAGE_CRC_REFRESH_BYTES);
+      }
+
       //Check for any secondary comms requiring action. Note that AVR runs this at a fixed 30Hz. 
       if ((configPage9.enable_secondarySerial == 1)  //secondary serial interface enabled
       && (secondarySerial.available() > SERIAL_BUFFER_THRESHOLD))

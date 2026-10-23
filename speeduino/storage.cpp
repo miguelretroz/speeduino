@@ -10,6 +10,7 @@ A full copy of the license may be found in the projects root directory
 #include "globals.h"
 #include "storage.h"
 #include "pages.h"
+#include "page_crc.h"
 #include "sensors.h"
 #include "preprocessor.h"
 #include "unit_testing.h"
@@ -510,6 +511,7 @@ static inline uint16_t loadTable(TTable &table, uint16_t address)
 
 void loadAllPages(void)
 {
+  invalidateAllPageCRC32();
   (void)loadTable(fuelTable, EEPROM_CONFIG1_MAP);
   (void)load_range(EEPROM_CONFIG2_START, (byte *)&configPage2, (byte *)&configPage2+sizeof(configPage2));
   

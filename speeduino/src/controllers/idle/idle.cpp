@@ -10,6 +10,8 @@ A full copy of the license may be found in the projects root directory
 #include "preprocessor.h"
 #include "units.h"
 #include "globals.h"
+#include "pages.h"
+#include "page_crc.h"
 #include "../pidTune/pidTuneController.h"
 
 using namespace idleController::detail;
@@ -153,6 +155,8 @@ static void configureIdlePID(const config6 &page6, uint32_t minOutput, uint32_t 
 
 void initialiseIdle(bool forcehoming)
 {
+  // Clears iacPWMrun for the stepper modes; also runs after boot (idle mode changed, back on battery power)
+  invalidatePageCRC32(afrSetPage);
   //By default, turn off the PWM interrupt (It gets turned on below if needed)
   IDLE_TIMER_DISABLE();
 

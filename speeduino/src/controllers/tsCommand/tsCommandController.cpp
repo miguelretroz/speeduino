@@ -7,6 +7,8 @@
 #include "tsCommandController.h"
 #include "../../../sensors.h"
 #include "../../../storage.h"
+#include "../../../pages.h"
+#include "../../../page_crc.h"
 #include "../../../SD_logger.h"
 #include "../../../pages.h"
 #include "../../../scheduledIO_ign.h"
@@ -164,6 +166,7 @@ static void computeVssRatio(statuses &current, config2 &page2, uint8_t ratioInde
   if(current.vss > 0)
   {
     page2.vssRatios[ratioIndex] = (current.vss * 10000UL) / current.RPM;
+    invalidatePageCRC32(veSetPage);
     savePage(1); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
     current.vssUiRefresh = true;
   }
@@ -278,6 +281,7 @@ bool handleTsCommand(uint16_t command, statuses &current, config2 &page2)
     //VSS Calibration routines
     case TS_CMD_VSS_60KMH:
       page2.vssPulsesPerKm = calcPulsesPerKm(current, page2, vssGetPulseGap);
+      invalidatePageCRC32(veSetPage);
       savePage(veSetPage); // Need to manually save the new config value as it will not trigger a burn in tunerStudio due to use of ControllerPriority
       current.vssUiRefresh = true;
       break;

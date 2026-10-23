@@ -19,6 +19,7 @@
 #include "acc_mc33810.h"
 #include "board_definition.h"
 #include "pages.h"
+#include "page_crc.h"
 #ifdef SD_LOGGING
   #include "SD_logger.h"
   #include "rtc_common.h"
@@ -263,6 +264,8 @@ void initialiseAll(void)
     initialiseTachoControl(pinNumbers.pinTachOut, configPage2, configPage6, currentStatus);
 
     currentStatus.initialisationComplete = true;
+    // Boot wrote to the pages in many places (EEPROM load, migrations, defaults, checks): no CRC from before is valid
+    invalidateAllPageCRC32();
     digitalWrite(LED_BUILTIN, HIGH);
 }
 

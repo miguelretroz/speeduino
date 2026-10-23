@@ -4,6 +4,7 @@
 #include "preprocessor.h"
 #include "table3d_visitor.h"
 #include "prog_mem_support.h"
+#include "page_crc.h"
 
 // This minimizes RAM usage at no performance cost
 #pragma GCC optimize ("Os") 
@@ -206,6 +207,49 @@ byte getEntityValue(const entity_t &entity, uint16_t entityOffset)
   }
   // Entity has no data
   return 0U;
+}
+
+struct get_table_values_visitor {
+  uint16_t _tableOffset;
+  byte *_pValues;
+  uint8_t _count;
+
+  explicit get_table_values_visitor(uint16_t tableOffset, byte *pValues, uint8_t count)
+    : _tableOffset(tableOffset)
+    , _pValues(pValues)
+    , _count(count)
+  {
+  }
+
+  template <typename TTable>
+  void visit(TTable &table) {
+    for (uint8_t index=0U; index<_count; ++index)
+    {
+      uint16_t tableOffset = _tableOffset+index;
+      _pValues[index] = (tableOffset<getTableSize<TTable>()) ? *offset_to_table<TTable>(&table, tableOffset) : 0U;
+    }
+  }
+};
+
+void getEntityValues(const entity_t &entity, uint16_t entityOffset, byte *pValues, uint8_t count)
+{
+  if (EntityType::Raw==entity.type)
+  {
+    for (uint8_t index=0U; index<count; ++index)
+    {
+      pValues[index] = get_raw_location(entity, entityOffset+index);
+    }
+  }
+  else if (EntityType::Table==entity.type)
+  {
+    get_table_values_visitor visitor(entityOffset, pValues, count);
+    visitTable3d<get_table_values_visitor, void>(*entity.pTable, entity.table_key, visitor);
+  }
+  else
+  {
+    // Entity has no data
+    (void)memset(pValues, 0, count);
+  }
 }
 
 struct set_table_value_visitor {
@@ -454,6 +498,7 @@ static void setEntityToEmpty(page_iterator_t iter) {
 // ====================================== External functions  ====================================
 
 void __attribute__((noinline)) setTuneToEmpty(void) {
+  invalidateAllPageCRC32();
   for (uint8_t page=MIN_PAGE_NUM; page<MAX_PAGE_NUM; ++page) {
     page_iterator_t iter = page_begin(page);
     while (iter.entity.type!=EntityType::End) {
@@ -483,6 +528,7 @@ static inline uint16_t pageOffsetToEntityOffset(const page_iterator_t &iter, uin
 
 bool setPageValue(uint8_t pageNum, uint16_t pageOffset, byte value)
 {
+  invalidatePageCRC32(pageNum);
   page_iterator_t iter = map_page_offset_to_entity(pageNum, pageOffset);
 
   return setEntityValue(iter.entity, pageOffsetToEntityOffset(iter, pageOffset), value);

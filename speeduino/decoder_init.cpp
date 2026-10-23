@@ -5,6 +5,8 @@
 #include "globals.h"
 #include "preprocessor.h"
 #include "unit_testing.h"
+#include "pages.h"
+#include "page_crc.h"
 
 #pragma GCC optimize("Os")
 
@@ -130,6 +132,12 @@ static decoder_init_func_t getDecoderInitFunc(uint8_t decoderIndex)
 /** Initialise the chosen trigger decoder. */
 decoder_t buildDecoder(uint8_t decoderIndex)
 {
+  // The page fields decoder setups may overwrite (see below)
+  const uint8_t triggerTeeth = configPage4.triggerTeeth;
+  const uint8_t triggerMissingTeeth = configPage4.triggerMissingTeeth;
+  const uint8_t trigSpeed = configPage4.TrigSpeed;
+  const uint8_t perToothIgn = configPage2.perToothIgn;
+
   decoder_t decoder = getDecoderInitFunc(decoderIndex)();
 
   pinNumbers.pinTrigger = decoder.primary.attach(pinNumbers.pinTrigger);
@@ -138,6 +146,19 @@ decoder_t buildDecoder(uint8_t decoderIndex)
 
   // Turn off per tooth ignition if the decoder doesn't support it
   configPage2.perToothIgn = configPage2.perToothIgn && decoder.getFeatures().supportsPerToothIgnition;
+
+  // Some decoder setups overwrite trigger fields of configPage4 (teeth, missing teeth, speed). This runs on every loop
+  // while the engine is stopped, not only at boot: only drop the cached page CRCs when something changed, or they
+  // would be recalculated all the time
+  if ((triggerTeeth != configPage4.triggerTeeth) || (triggerMissingTeeth != configPage4.triggerMissingTeeth)
+   || (trigSpeed != configPage4.TrigSpeed))
+  {
+    invalidatePageCRC32(ignSetPage);
+  }
+  if (perToothIgn != configPage2.perToothIgn)
+  {
+    invalidatePageCRC32(veSetPage);
+  }
 
   return decoder;
 }

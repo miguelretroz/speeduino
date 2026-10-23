@@ -198,6 +198,16 @@ byte getEntityValue(const entity_t &entity,  /**< [in] The entity to update */
                     uint16_t offset          /**< [in] The offset within the entity */
                     );
 
+/**
+ * @brief Gets consecutive values from an entity, as getEntityValue() for each offset, but with one look up of the
+ * table type for all of them.
+ */
+void getEntityValues(const entity_t &entity,  /**< [in] The entity to read */
+                     uint16_t offset,          /**< [in] The offset of the first value within the entity */
+                     byte *pValues,            /**< [out] Receives count values */
+                     uint8_t count             /**< [in] How many values */
+                     );
+
 /** @brief Sets a single value from a page, with data aligned as per the ini file */
 bool setEntityValue(entity_t &entity,  /**< [in] The entity to update */ 
                     uint16_t offset,   /**< [in] The offset within the entity */
