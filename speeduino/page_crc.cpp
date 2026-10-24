@@ -9,18 +9,18 @@
 
 // The CRC of a page is asked by TunerStudio (all pages when it connects) and by anything else on the TS protocol
 // (e.g. a dash on the secondary serial). It is answered inside the main loop, so it has to be quick:
-// - each page entity is read as a whole: a raw block goes to the CRC in one call, a table in chunks, without
-//   looking up the entity again for every byte (that look up made a page take 10 to 70 ms on the Mega);
-// - the value is cached per page until something writes to the page (see invalidatePageCRC32());
-// - refreshPageCRC32() recalculates the pages that were written, a few bytes per call from the loop, so a request
-//   almost always finds the page in the cache.
+// - the page bytes go to the CRC straight from memory, a whole entity at a time (looking the entity up for every
+//   byte made a page take 10 to 70 ms on the Mega);
+// - the value is cached per page until something changes the page (see invalidatePageCRC32());
+// - refreshPageCRC32() recalculates the changed pages, a few bytes per call from the loop, so a request almost always
+//   finds the page in the cache.
 
 // Zero length CRC calls (start, finish) still need a real pointer: with a null one, the hardware CRC of the Teensy 3.x
 // computes the end of the data as 0 - 4 and reads memory until it faults
 static const uint8_t CRC_NO_DATA = 0U;
 
-// Table bytes go to the CRC in chunks of this size (stack buffer)
-static constexpr uint8_t TABLE_CHUNK_SIZE = 16U;
+// Bytes with no entity behind them read as 0: fed to the CRC from this
+static constexpr uint8_t ZERO_CHUNK_SIZE = 16U;
 
 static uint32_t crcCache[MAX_PAGE_NUM];
 // Bit N set: crcCache[N] holds the CRC of page N
@@ -38,55 +38,28 @@ static FastCRC32 refreshCrc;
 static page_iterator_t refreshEntity;
 #endif
 
-// Feeds length bytes of an entity, from entityOffset, to the CRC
-static void crcEntity(FastCRC32 &crcCalc, const entity_t &entity, uint16_t entityOffset, uint16_t length)
-{
-  if (entity.type == EntityType::Raw)
-  {
-    (void)crcCalc.crc32_upd((const uint8_t *)entity.pRaw + entityOffset, length);
-  }
-  else
-  {
-    // Tables are not laid out in memory as on the page; no entity (or past the end) reads as 0
-    uint8_t chunk[TABLE_CHUNK_SIZE];
-    uint16_t done = 0U;
-    while (done < length)
-    {
-      uint8_t count = (uint8_t)(std::min)((uint16_t)TABLE_CHUNK_SIZE, (uint16_t)(length - done));
-      getEntityValues(entity, entityOffset + done, chunk, count);
-      (void)crcCalc.crc32_upd(chunk, count);
-      done = done + count;
-    }
-  }
-}
-
-// Feeds the page bytes [start, end) to the CRC: the same bytes as getPageValue() for each offset.
-// iter is an entity of the page at or before start; it is left on the entity holding end (or the End entity).
+// Feeds the page bytes [start, end) to the CRC. iter: as forEachPageSpan().
 static void crcPageBytes(FastCRC32 &crcCalc, page_iterator_t &iter, uint16_t start, uint16_t end)
 {
-  while (start < end)
-  {
-    if (iter.entity.type == EntityType::End)
+  forEachPageSpan(iter, start, end,
+    [&crcCalc](const entity_t &entity, uint16_t entityOffset, uint16_t length)
     {
-      // Past the last entity (e.g. the trim tables of injector channels this board doesn't have)
-      crcEntity(crcCalc, iter.entity, 0U, end - start);
-      start = end;
-    }
-    else
-    {
-      uint16_t entityEnd = iter.entity.start + iter.entity.size;
-      if (start < entityEnd)
+      const byte *pBytes = getEntityBytes(entity);
+      if (pBytes != nullptr)
       {
-        uint16_t stop = (std::min)(end, entityEnd);
-        crcEntity(crcCalc, iter.entity, start - iter.entity.start, stop - start);
-        start = stop;
+        (void)crcCalc.crc32_upd(pBytes + entityOffset, length);
       }
-      if (start >= entityEnd)
+      else
       {
-        iter = advance(iter);
+        const uint8_t zeros[ZERO_CHUNK_SIZE] = { 0U };
+        while (length > 0U)
+        {
+          uint16_t count = (std::min)(length, (uint16_t)ZERO_CHUNK_SIZE);
+          (void)crcCalc.crc32_upd(zeros, count);
+          length = length - count;
+        }
       }
-    }
-  }
+    });
 }
 
 // The bytes the CRC covers: an empty page (or a page number past the last one) reads as one 0 byte

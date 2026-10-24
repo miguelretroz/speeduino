@@ -29,5 +29,5 @@ void invalidateAllPageCRC32(void);
  */
 void refreshPageCRC32(uint8_t maxBytes /**< [in] Page bytes to process in this call. */);
 
-/** @brief Page bytes per refreshPageCRC32() call from the loop (at 1 kHz): about 0.1 ms on the Mega. */
+/** @brief Page bytes per refreshPageCRC32() call from the loop: about 0.05 ms on the Mega. */
 constexpr uint8_t PAGE_CRC_REFRESH_BYTES = 16U;

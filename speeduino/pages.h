@@ -199,14 +199,10 @@ byte getEntityValue(const entity_t &entity,  /**< [in] The entity to update */
                     );
 
 /**
- * @brief Gets consecutive values from an entity, as getEntityValue() for each offset, but with one look up of the
- * table type for all of them.
+ * @brief Where the page bytes of an entity are in memory, in page order: a raw block, or a 3D table (its values, X axis
+ * and Y axis are consecutive byte arrays). nullptr: the entity has no data (reads as 0, writes are ignored).
  */
-void getEntityValues(const entity_t &entity,  /**< [in] The entity to read */
-                     uint16_t offset,          /**< [in] The offset of the first value within the entity */
-                     byte *pValues,            /**< [out] Receives count values */
-                     uint8_t count             /**< [in] How many values */
-                     );
+byte* getEntityBytes(const entity_t &entity /**< [in] The entity */);
 
 /** @brief Sets a single value from a page, with data aligned as per the ini file */
 bool setEntityValue(entity_t &entity,  /**< [in] The entity to update */ 
@@ -223,3 +219,55 @@ page_iterator_t page_begin(uint8_t pageNum /**< [in] The page number to iterate 
 
 /** @brief Moves the iterator to the next sub-entity on the page */
 page_iterator_t advance(const page_iterator_t &it /**< [in] The current iterator */);
+
+/**
+ * @brief Splits the page bytes [start, end) by entity: calls spanFunc(entity, entityOffset, length) for each piece,
+ * in page order.
+ *
+ * iter is an entity of the page at or before start (page_begin() always works) and is left on the entity holding
+ * the last byte, so a caller can continue from there. The next entity is only looked up when there are bytes for it:
+ * a call ending on an entity boundary leaves that look up to the next call. Past the last entity the entity type is
+ * End (no data).
+ */
+template <typename TSpanFunc>
+void forEachPageSpan(page_iterator_t &iter, uint16_t start, uint16_t end, TSpanFunc spanFunc)
+{
+    while (start < end)
+    {
+        if (iter.entity.type == EntityType::End)
+        {
+            spanFunc(iter.entity, 0U, (uint16_t)(end - start));
+            start = end;
+        }
+        else
+        {
+            uint16_t entityEnd = iter.entity.start + iter.entity.size;
+            if (start < entityEnd)
+            {
+                uint16_t stop = (end < entityEnd) ? end : entityEnd;
+                spanFunc(iter.entity, (uint16_t)(start - iter.entity.start), (uint16_t)(stop - start));
+                start = stop;
+            }
+            else
+            {
+                iter = advance(iter);
+            }
+        }
+    }
+}
+
+/** @brief Copies page bytes to a buffer: the same bytes as getPageValue() for each offset, without looking up the
+ * entity for every byte. */
+void getPageValues(uint8_t pageNum,     /**< [in] The page number */
+                   uint16_t pageOffset, /**< [in] The first page byte */
+                   byte *pBuffer,       /**< [out] Receives length bytes */
+                   uint16_t length      /**< [in] How many bytes */
+                   );
+
+/** @brief Writes page bytes from a buffer, as setPageValue() for each offset (bytes with no entity behind them are
+ * ignored), without looking up the entity for every byte. */
+void setPageValues(uint8_t pageNum,       /**< [in] The page number */
+                   uint16_t pageOffset,   /**< [in] The first page byte */
+                   const byte *pBuffer,   /**< [in] length bytes */
+                   uint16_t length        /**< [in] How many bytes */
+                   );

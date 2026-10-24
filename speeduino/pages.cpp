@@ -209,47 +209,41 @@ byte getEntityValue(const entity_t &entity, uint16_t entityOffset)
   return 0U;
 }
 
-struct get_table_values_visitor {
-  uint16_t _tableOffset;
-  byte *_pValues;
-  uint8_t _count;
+// ========================= Whole entity access =========================
 
-  explicit get_table_values_visitor(uint16_t tableOffset, byte *pValues, uint8_t count)
-    : _tableOffset(tableOffset)
-    , _pValues(pValues)
-    , _count(count)
-  {
-  }
-
+// A table's page bytes (offset_to_table: values, then the X axis, then the Y axis, one byte each) are its values, X
+// axis and Y axis arrays, which are consecutive in memory: one block, like a raw entity.
+struct table_bytes_visitor {
   template <typename TTable>
-  void visit(TTable &table) {
-    for (uint8_t index=0U; index<_count; ++index)
-    {
-      uint16_t tableOffset = _tableOffset+index;
-      _pValues[index] = (tableOffset<getTableSize<TTable>()) ? *offset_to_table<TTable>(&table, tableOffset) : 0U;
-    }
+  byte* visit(TTable &table) {
+    static_assert((sizeof(table.values[0])==1U) && (sizeof(table.axisX[0])==1U) && (sizeof(table.axisY[0])==1U),
+                  "Table page bytes are the arrays themselves");
+    static_assert(sizeof(table.values)+sizeof(table.axisX)+sizeof(table.axisY)==getTableSize<TTable>(),
+                  "Table page bytes are the arrays themselves");
+    return table.values.data();
   }
 };
 
-void getEntityValues(const entity_t &entity, uint16_t entityOffset, byte *pValues, uint8_t count)
+struct invalidate_table_cache_visitor {
+  template <typename TTable>
+  void visit(TTable &table) {
+    invalidate_cache(&table.get_value_cache);
+  }
+};
+
+byte* getEntityBytes(const entity_t &entity)
 {
   if (EntityType::Raw==entity.type)
   {
-    for (uint8_t index=0U; index<count; ++index)
-    {
-      pValues[index] = get_raw_location(entity, entityOffset+index);
-    }
+    return (byte*)entity.pRaw;
   }
-  else if (EntityType::Table==entity.type)
+  if (EntityType::Table==entity.type)
   {
-    get_table_values_visitor visitor(entityOffset, pValues, count);
-    visitTable3d<get_table_values_visitor, void>(*entity.pTable, entity.table_key, visitor);
+    table_bytes_visitor visitor;
+    return visitTable3d<table_bytes_visitor, byte*>(*entity.pTable, entity.table_key, visitor);
   }
-  else
-  {
-    // Entity has no data
-    (void)memset(pValues, 0, count);
-  }
+  // Entity has no data
+  return nullptr;
 }
 
 struct set_table_value_visitor {
@@ -532,6 +526,63 @@ bool setPageValue(uint8_t pageNum, uint16_t pageOffset, byte value)
   page_iterator_t iter = map_page_offset_to_entity(pageNum, pageOffset);
 
   return setEntityValue(iter.entity, pageOffsetToEntityOffset(iter, pageOffset), value);
+}
+
+// The part of [pageOffset, pageOffset+length) below 64K: a request with an offset near the top must not wrap around
+static uint16_t lengthInRange(uint16_t pageOffset, uint16_t length)
+{
+  return (uint16_t)(std::min)((uint32_t)length, (uint32_t)UINT16_MAX-pageOffset);
+}
+
+void getPageValues(uint8_t pageNum, uint16_t pageOffset, byte *pBuffer, uint16_t length)
+{
+  // Past the end of the page reads as 0, like getPageValue()
+  const uint16_t inRange = lengthInRange(pageOffset, length);
+  (void)memset(pBuffer+inRange, 0, length-inRange);
+
+  page_iterator_t iter = page_begin(pageNum);
+  forEachPageSpan(iter, pageOffset, pageOffset+inRange,
+    [&pBuffer](const entity_t &entity, uint16_t entityOffset, uint16_t spanLength)
+    {
+      const byte *pBytes = getEntityBytes(entity);
+      if (pBytes!=nullptr)
+      {
+        (void)memcpy(pBuffer, pBytes+entityOffset, spanLength);
+      }
+      else
+      {
+        (void)memset(pBuffer, 0, spanLength);
+      }
+      pBuffer = pBuffer+spanLength;
+    });
+}
+
+void setPageValues(uint8_t pageNum, uint16_t pageOffset, const byte *pBuffer, uint16_t length)
+{
+  bool isChanged = false;
+  page_iterator_t iter = page_begin(pageNum);
+  forEachPageSpan(iter, pageOffset, pageOffset+lengthInRange(pageOffset, length),
+    [&pBuffer, &isChanged](const entity_t &entity, uint16_t entityOffset, uint16_t spanLength)
+    {
+      byte *pBytes = getEntityBytes(entity);
+      // Only what differs is written: an unchanged table keeps its lookup cache, an unchanged page its CRC
+      if ((pBytes!=nullptr) && (memcmp(pBytes+entityOffset, pBuffer, spanLength)!=0))
+      {
+        (void)memcpy(pBytes+entityOffset, pBuffer, spanLength);
+        if (EntityType::Table==entity.type)
+        {
+          invalidate_table_cache_visitor visitor;
+          visitTable3d<invalidate_table_cache_visitor, void>(*entity.pTable, entity.table_key, visitor);
+        }
+        isChanged = true;
+      }
+      pBuffer = pBuffer+spanLength;
+    });
+
+  if (isChanged)
+  {
+    invalidatePageCRC32(pageNum);
+  }
 }
 
 byte getPageValue(uint8_t pageNum, uint16_t pageOffset)

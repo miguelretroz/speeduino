@@ -344,10 +344,8 @@ static bool updatePageValues(uint8_t pageNum, uint16_t offset, const byte *buffe
 {
   if ( addWithoutOverflow(offset, length) <= getPageSize(pageNum) )
   {
-    for(uint16_t i = 0; i < length; i++)
-    {
-      setPageValue(pageNum, (offset + i), buffer[i]);
-    }
+    // Whole entities at a time: one look up per byte held the main loop ~12 ms for a 251 byte block on the Mega
+    setPageValues(pageNum, offset, buffer, length);
     setStorageWriteTimeout(EEPROM_DEFER_DELAY);
     return true;
   }
@@ -365,10 +363,8 @@ static bool updatePageValues(uint8_t pageNum, uint16_t offset, const byte *buffe
  */
 static void loadPageValuesToBuffer(uint8_t pageNum, uint16_t offset, byte *buffer, uint16_t length)
 {
-  for(uint16_t i = 0; i < length; i++)
-  {
-    buffer[i] = getPageValue(pageNum, offset + i);
-  }
+  // Whole entities at a time: one look up per byte held the main loop ~12 ms for a 251 byte block on the Mega
+  getPageValues(pageNum, offset, buffer, length);
 }
 
 /** @brief Send a status record back to tuning/logging SW.
