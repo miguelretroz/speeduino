@@ -3,6 +3,8 @@
 #include "context.h"
 #include "units.h"
 #include "src/controllers/idle/idleController_state.h"
+#include "pages.h"
+#include "page_crc.h"
 
 extern idleController::detail::state_t _idleState;
 
@@ -100,6 +102,23 @@ static void test_initialiseIdle_step_olcl(void)
   TEST_ASSERT_NOT_EQUAL(0, _idleState.idle_pwm_max_count);
 }
 
+// initialiseIdle() clears iacPWMrun for the stepper modes, also after boot (idle mode changed, back on battery power)
+static void test_initialiseIdle_stepper_page_crc(void)
+{
+  context_t context;
+  context.prepare_idle(IAC_ALGORITHM_STEP_OLCL);
+  configPage6.iacPWMrun = true;
+  invalidateAllPageCRC32();
+  uint32_t before = getPageCRC32(afrSetPage);
+
+  initialiseIdle(true);
+
+  TEST_ASSERT_FALSE(configPage6.iacPWMrun);
+  TEST_ASSERT_NOT_EQUAL(before, getPageCRC32(afrSetPage));
+  TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(afrSetPage), getPageCRC32(afrSetPage));
+  invalidateAllPageCRC32();
+}
+
 void testInitialiseIdle(void)
 {
   unity_filename_guard_t guard(__FILE__);
@@ -113,4 +132,5 @@ void testInitialiseIdle(void)
   RUN_TEST(test_initialiseIdle_step_open_loop);
   RUN_TEST(test_initialiseIdle_step_closed_loop);
   RUN_TEST(test_initialiseIdle_step_olcl);
+  RUN_TEST(test_initialiseIdle_stepper_page_crc);
 }

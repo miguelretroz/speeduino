@@ -6,6 +6,8 @@
 #include "../test_utils.h"
 #include "globals.h"
 #include "decoder_name.h"
+#include "pages.h"
+#include "page_crc.h"
 
 static void assert_decoder(const decoder_t &decoder)
 {
@@ -126,6 +128,45 @@ static void test_buildDecoder_OutOfRange(void)
     decoder.getCrankAngle();
 }
 
+// The loop rebuilds the decoder on every pass while the engine is stopped: the cached page CRCs may only be dropped
+// when the build changed a page byte, and must be when it did
+static void test_buildDecoder_page_crc(void)
+{
+    configPage2.nCylinders = 4;
+    configPage2.perToothIgn = true;
+    (void)buildDecoder(DECODER_MISSING_TOOTH);
+    invalidateAllPageCRC32();
+    uint32_t veSet = getPageCRC32(veSetPage);
+    uint32_t ignSet = getPageCRC32(ignSetPage);
+
+    // Nothing changed: the cache stays (a change behind its back doesn't show)
+    configPage2.aeColdPct = configPage2.aeColdPct ^ 0x5AU;
+    configPage4.ADCFILTER_TPS = configPage4.ADCFILTER_TPS ^ 0x5AU;
+    (void)buildDecoder(DECODER_MISSING_TOOTH);
+    TEST_ASSERT_EQUAL_UINT32(veSet, getPageCRC32(veSetPage));
+    TEST_ASSERT_EQUAL_UINT32(ignSet, getPageCRC32(ignSetPage));
+
+    // The ST170 setup overwrites the trigger teeth: page 4 is calculated again
+    configPage4.triggerTeeth = 60U;
+    configPage4.triggerMissingTeeth = 2U;
+    invalidateAllPageCRC32();
+    ignSet = getPageCRC32(ignSetPage);
+    (void)buildDecoder(DECODER_ST170);
+    TEST_ASSERT_EQUAL_UINT8(36U, configPage4.triggerTeeth);
+    TEST_ASSERT_NOT_EQUAL(ignSet, getPageCRC32(ignSetPage));
+    TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(ignSetPage), getPageCRC32(ignSetPage));
+
+    // Per tooth ignition turned off: page 1 is calculated again
+    configPage2.perToothIgn = true;
+    invalidateAllPageCRC32();
+    veSet = getPageCRC32(veSetPage);
+    (void)buildDecoder(DECODER_HONDA_J32);
+    TEST_ASSERT_FALSE(configPage2.perToothIgn);
+    TEST_ASSERT_NOT_EQUAL(veSet, getPageCRC32(veSetPage));
+    TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(veSetPage), getPageCRC32(veSetPage));
+    invalidateAllPageCRC32();
+}
+
 void testDecoderInit(void)
 {
   SET_UNITY_FILENAME() {
@@ -133,5 +174,6 @@ void testDecoderInit(void)
     RUN_TEST_P(test_buildDecoder_attachesInterrupts);
     RUN_TEST_P(test_buildDecoder_TurnsOffPerToothIgn);
     RUN_TEST_P(test_buildDecoder_OutOfRange);
+    RUN_TEST_P(test_buildDecoder_page_crc);
   }
 }

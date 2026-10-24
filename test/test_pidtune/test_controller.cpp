@@ -1,6 +1,7 @@
 #include <unity.h>
 #include "../test_utils.h"
 #include "pidtune_fixture.h"
+#include "page_crc.h"
 #include "src/controllers/tsCommand/tsCommandController.h"
 #include "storage.h"
 #include "pages.h"
@@ -264,6 +265,20 @@ static void test_apply_idle_result(void)
 }
 
 // The bytes mean something else in stepper closed loop (velocity form): a result for the open + closed loop mode can't go there
+// Apply writes the page 6 gains itself: the cached page CRC must go
+static void test_apply_drops_page_crc(void)
+{
+    run_idle_tune_to_done();
+    invalidateAllPageCRC32();
+    uint32_t before = getPageCRC32(afrSetPage);
+
+    TEST_ASSERT_TRUE(send_command(TS_CMD_PIDTUNE_APPLY, TEST_START_MS));
+
+    TEST_ASSERT_NOT_EQUAL(before, getPageCRC32(afrSetPage));
+    TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(afrSetPage), getPageCRC32(afrSetPage));
+    invalidateAllPageCRC32();
+}
+
 static void test_apply_refused_after_a_mode_change(void)
 {
     run_idle_tune_to_done();
@@ -521,6 +536,7 @@ void testPidTuneController(void)
     RUN_TEST_P(test_idle_timeout_without_samples);
     RUN_TEST_P(test_abort_command);
     RUN_TEST_P(test_apply_idle_result);
+    RUN_TEST_P(test_apply_drops_page_crc);
     RUN_TEST_P(test_apply_refused_after_a_mode_change);
     RUN_TEST_P(test_apply_refused_for_another_valve);
     RUN_TEST_P(test_apply_burns_only_the_gains);

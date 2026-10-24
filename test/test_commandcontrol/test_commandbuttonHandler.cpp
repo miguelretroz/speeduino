@@ -4,6 +4,8 @@
 #include "src/controllers/tsCommand/tsCommandController.h"
 #include "scheduledIO_direct_inj.h"
 #include "scheduledIO_direct_ign.h"
+#include "pages.h"
+#include "page_crc.h"
 
 extern byte HWTest_INJ_Pulsed;
 extern byte HWTest_IGN_Pulsed;
@@ -86,6 +88,20 @@ static void test_handler_vss_ratio_with_vss(uint16_t ratioCmd, uint8_t vssIndex)
   TEST_ASSERT_TRUE(context.handleTsCommand(ratioCmd));
   TEST_ASSERT_TRUE(context.current.vssUiRefresh);
   TEST_ASSERT_EQUAL_UINT16((context.current.vss*10000UL)/context.current.RPM, context.page2.vssRatios[vssIndex]);
+}
+
+// The calibration writes page 1 itself: the cached page CRC must go (a change behind its back shows after it)
+static void test_handler_vss_ratio_drops_page_crc(void)
+{
+  invalidateAllPageCRC32();
+  (void)getPageCRC32(veSetPage);
+  configPage2.aeColdPct = configPage2.aeColdPct ^ 0x5AU;
+
+  auto context = setup_vss(250);
+  TEST_ASSERT_TRUE(context.handleTsCommand(TS_CMD_VSS_RATIO1));
+
+  TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(veSetPage), getPageCRC32(veSetPage));
+  invalidateAllPageCRC32();
 }
 
 static void test_handler_vss_ratio_no_vss_no_change(uint16_t ratioCmd, uint8_t vssIndex)
@@ -508,6 +524,7 @@ void testTSCommandHandler(void)
     RUN_TEST(test_calc_pulses_per_km_falls_back_to_config_value);
     RUN_TEST(test_vss_60km_internal_pin);
     RUN_TEST(test_vss_60km_external);
+    RUN_TEST(test_handler_vss_ratio_drops_page_crc);
 
     test_handler_inj1();
 #if INJ_CHANNELS >= 2
