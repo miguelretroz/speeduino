@@ -23,6 +23,9 @@ void invalidateAllPageCRC32(void);
 /**
  * @brief Recalculates the invalidated pages in the background, at most maxBytes per call (the whole page on boards
  * with a hardware CRC unit), so getPageCRC32() finds them in the cache.
+ *
+ * Call it at 1 kHz from the loop, only while no serial transfer is in progress (the Teensy 3.x CRC unit is shared with
+ * the serial packets).
  */
 void refreshPageCRC32(uint8_t maxBytes /**< [in] Page bytes to process in this call. */);
 

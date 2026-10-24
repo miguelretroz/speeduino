@@ -192,8 +192,10 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
         serialReceive();
       }
       
-      // Keep the page CRCs (TS 'd' command) cached, so a request never calculates a whole page in the loop
-      if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_1KHZ))
+      // Keep the page CRCs (TS 'd' command) cached, so a request never calculates a whole page in the loop.
+      // Not while a serial transfer is in progress: tooth and composite logs build their CRC over several loops, and
+      // the Teensy 3.x has a single hardware CRC unit
+      if (BIT_CHECK(currentStatus.LOOP_TIMER, BIT_TIMER_1KHZ) && (serialStatusFlag == SERIAL_INACTIVE))
       {
         refreshPageCRC32(PAGE_CRC_REFRESH_BYTES);
       }

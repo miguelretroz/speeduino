@@ -15,6 +15,10 @@
 // - refreshPageCRC32() recalculates the pages that were written, a few bytes per call from the loop, so a request
 //   almost always finds the page in the cache.
 
+// Zero length CRC calls (start, finish) still need a real pointer: with a null one, the hardware CRC of the Teensy 3.x
+// computes the end of the data as 0 - 4 and reads memory until it faults
+static const uint8_t CRC_NO_DATA = 0U;
+
 // Table bytes go to the CRC in chunks of this size (stack buffer)
 static constexpr uint8_t TABLE_CHUNK_SIZE = 16U;
 
@@ -94,11 +98,11 @@ static uint16_t crcLength(uint8_t pageNum)
 uint32_t calculatePageCRC32(uint8_t pageNum)
 {
   FastCRC32 crcCalc;
-  (void)crcCalc.crc32(nullptr, 0U); // Start a new CRC
+  (void)crcCalc.crc32(&CRC_NO_DATA, 0U); // Start a new CRC
   page_iterator_t iter = page_begin(pageNum);
   crcPageBytes(crcCalc, iter, 0U, crcLength(pageNum));
   // Ends the CRC of the bytes fed so far
-  return crcCalc.crc32_upd(nullptr, 0U);
+  return crcCalc.crc32_upd(&CRC_NO_DATA, 0U);
 }
 
 uint32_t getPageCRC32(uint8_t pageNum)
@@ -160,7 +164,7 @@ void refreshPageCRC32(uint8_t maxBytes)
     refreshOffset = 0U;
     refreshSize = crcLength(refreshPage);
     refreshEntity = page_begin(refreshPage);
-    (void)refreshCrc.crc32(nullptr, 0U);
+    (void)refreshCrc.crc32(&CRC_NO_DATA, 0U);
     // The look ups above take about as long as the bytes: the bytes go in the next call
     return;
   }
@@ -171,13 +175,14 @@ void refreshPageCRC32(uint8_t maxBytes)
 
   if (refreshOffset >= refreshSize)
   {
-    crcCache[refreshPage] = refreshCrc.crc32_upd(nullptr, 0U);
+    crcCache[refreshPage] = refreshCrc.crc32_upd(&CRC_NO_DATA, 0U);
     BIT_SET(crcCacheValid, refreshPage);
     refreshPage = NO_PAGE;
   }
 #else
   // Hardware CRC (Teensy 3.x): one CRC unit with one state, shared with the serial packets, so a CRC can't be left
-  // half way between calls. A whole page is quick on these.
+  // half way between calls (the loop only calls this with no serial transfer in progress). A whole page is quick on
+  // these.
   (void)maxBytes;
   (void)getPageCRC32(firstInvalidPage());
 #endif
