@@ -25,9 +25,12 @@ void invalidateAllPageCRC32(void);
  * with a hardware CRC unit), so getPageCRC32() finds them in the cache.
  *
  * Call it at 1 kHz from the loop, only while no serial transfer is in progress (the Teensy 3.x CRC unit is shared with
- * the serial packets).
+ * the serial packets). It starts PAGE_CRC_REFRESH_HOLDOFF calls after the last page change.
  */
 void refreshPageCRC32(uint8_t maxBytes /**< [in] Page bytes to process in this call. */);
 
 /** @brief Page bytes per refreshPageCRC32() call from the loop: about 0.05 ms on the Mega. */
 constexpr uint8_t PAGE_CRC_REFRESH_BYTES = 16U;
+
+/** @brief refreshPageCRC32() calls (1 kHz: 0.5 s) without page changes before the background refresh starts. */
+constexpr uint16_t PAGE_CRC_REFRESH_HOLDOFF = 500U;

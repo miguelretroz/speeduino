@@ -12,8 +12,8 @@
 // - the page bytes go to the CRC straight from memory, a whole entity at a time (looking the entity up for every
 //   byte made a page take 10 to 70 ms on the Mega);
 // - the value is cached per page until something changes the page (see invalidatePageCRC32());
-// - refreshPageCRC32() recalculates the changed pages, a few bytes per call from the loop, so a request almost always
-//   finds the page in the cache.
+// - refreshPageCRC32() recalculates the changed pages, a few bytes per call from the loop, once the writes stop, so a
+//   request almost always finds the page in the cache.
 
 // Zero length CRC calls (start, finish) still need a real pointer: with a null one, the hardware CRC of the Teensy 3.x
 // computes the end of the data as 0 - 4 and reads memory until it faults
@@ -31,6 +31,8 @@ static constexpr uint16_t ALL_PAGES_VALID = (uint16_t)((1UL << MAX_PAGE_NUM) - 1
 // Background refresh: the page being calculated (NO_PAGE: none) and how far it got
 static constexpr uint8_t NO_PAGE = UINT8_MAX;
 static uint8_t refreshPage = NO_PAGE;
+// refreshPageCRC32() calls left before the refresh starts again after a page changed
+static uint16_t refreshHoldoff = 0U;
 #if CRC_SW
 static uint16_t refreshOffset = 0U;
 static uint16_t refreshSize = 0U;
@@ -98,6 +100,7 @@ void invalidatePageCRC32(uint8_t pageNum)
   if (pageNum < MAX_PAGE_NUM)
   {
     BIT_CLEAR(crcCacheValid, pageNum);
+    refreshHoldoff = PAGE_CRC_REFRESH_HOLDOFF;
     if (pageNum == refreshPage)
     {
       // Changed half way through: start it again
@@ -109,6 +112,7 @@ void invalidatePageCRC32(uint8_t pageNum)
 void invalidateAllPageCRC32(void)
 {
   crcCacheValid = 0U;
+  refreshHoldoff = PAGE_CRC_REFRESH_HOLDOFF;
   refreshPage = NO_PAGE;
 }
 
@@ -126,6 +130,13 @@ void refreshPageCRC32(uint8_t maxBytes)
 {
   if (crcCacheValid == ALL_PAGES_VALID)
   {
+    return;
+  }
+  if (refreshHoldoff > 0U)
+  {
+    // A burst of writes (TS live tuning, a dash learning the VE table) costs one recalculation when it ends, not one
+    // per write
+    --refreshHoldoff;
     return;
   }
 

@@ -170,10 +170,11 @@ static void refreshCalls(uint16_t calls)
     }
 }
 
-// Enough calls for every page (16 bytes a call, sizes total ~3.6 KB, one more call per page to start it)
+// Past the hold-off after the last change, plus enough calls for every page (16 bytes a call, sizes total ~3.6 KB,
+// one more call per page to start it)
 static void refreshAll(void)
 {
-    refreshCalls(400U);
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF + 400U);
 }
 
 static void test_refresh_fills_the_cache(void)
@@ -202,11 +203,11 @@ static void test_refresh_restarts_when_the_page_changes(void)
     setAllPages_Incremental('s');
     warmCache();
     invalidatePageCRC32(veMapPage);
-    // Part of the page (288 bytes)
-    refreshCalls(5U);
+    // Past the hold-off, then part of the page (288 bytes)
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF + 5U);
     TEST_ASSERT_TRUE(setPageValue(veMapPage, 10U, getPageValue(veMapPage, 10U) + 3U));
     TEST_ASSERT_TRUE(setPageValue(veMapPage, 250U, getPageValue(veMapPage, 250U) + 3U));
-    refreshCalls(40U);
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF + 40U);
     bypassWrite(&configPage2, 5U); // Not veMapPage: only to check nothing else is recalculated
     TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(veMapPage), getPageCRC32(veMapPage));
     invalidateAllPageCRC32();
@@ -218,11 +219,56 @@ static void test_refresh_after_request_mid_way(void)
     setAllPages_Incremental('q');
     warmCache();
     invalidatePageCRC32(ignMapPage);
-    refreshCalls(2U);
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF + 2U);
     uint32_t requested = getPageCRC32(ignMapPage);
     refreshCalls(40U);
     TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(ignMapPage), requested);
     TEST_ASSERT_EQUAL_UINT32(requested, getPageCRC32(ignMapPage));
+}
+
+static void test_refresh_waits_for_writes_to_settle(void)
+{
+    setAllPages_Incremental('w');
+    warmCache();
+
+    // Within the hold-off nothing is calculated: a change behind the cache's back still shows
+    invalidatePageCRC32(veSetPage);
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF - 1U);
+    bypassWrite(&configPage2, 6U);
+    TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(veSetPage), getPageCRC32(veSetPage));
+
+    // Another change starts the hold-off again
+    invalidatePageCRC32(veSetPage);
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF - 10U);
+    TEST_ASSERT_TRUE(setPageValue(afrSetPage, 2U, getPageValue(afrSetPage, 2U) + 1U));
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF - 1U);
+    bypassWrite(&configPage2, 7U);
+    TEST_ASSERT_EQUAL_UINT32(calculatePageCRC32(veSetPage), getPageCRC32(veSetPage));
+
+    // After it, the page is calculated in the background: the cache now hides a change behind its back
+    invalidatePageCRC32(veSetPage);
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF + 40U);
+    uint32_t refreshed = calculatePageCRC32(veSetPage);
+    bypassWrite(&configPage2, 8U);
+    TEST_ASSERT_EQUAL_UINT32(refreshed, getPageCRC32(veSetPage));
+    invalidateAllPageCRC32();
+}
+
+static void test_setPageValue_same_value_keeps_cache(void)
+{
+    setAllPages_Incremental('u');
+    warmCache();
+    uint32_t before = getPageCRC32(ignSetPage);
+    bypassWrite(&configPage4, 3U); // Only to see whether the cache was dropped
+
+    TEST_ASSERT_TRUE(setPageValue(ignSetPage, 10U, getPageValue(ignSetPage, 10U)));
+    TEST_ASSERT_EQUAL_UINT32(before, getPageCRC32(ignSetPage));
+
+    uint8_t same[32];
+    getPageValues(ignSetPage, 20U, same, sizeof(same));
+    setPageValues(ignSetPage, 20U, same, sizeof(same));
+    TEST_ASSERT_EQUAL_UINT32(before, getPageCRC32(ignSetPage));
+    invalidateAllPageCRC32();
 }
 
 // Windows over every page, crossing entity boundaries and the end of the page
@@ -348,6 +394,7 @@ static void test_page_access_time(void)
     uint32_t cached = micros()-start;
 
     invalidateAllPageCRC32();
+    refreshCalls(PAGE_CRC_REFRESH_HOLDOFF);
     uint32_t worstRefresh = 0U;
     for (uint16_t call=0U; call<400U; ++call)
     {
@@ -393,6 +440,8 @@ void testPageCrc(void) {
         RUN_TEST_P(test_refresh_fills_the_cache);
         RUN_TEST_P(test_refresh_restarts_when_the_page_changes);
         RUN_TEST_P(test_refresh_after_request_mid_way);
+        RUN_TEST_P(test_refresh_waits_for_writes_to_settle);
+        RUN_TEST_P(test_setPageValue_same_value_keeps_cache);
         RUN_TEST_P(test_getPageValues_matches_byte_by_byte);
         RUN_TEST_P(test_setPageValues_matches_byte_by_byte);
         RUN_TEST_P(test_setPageValues_invalidates_page_crc);

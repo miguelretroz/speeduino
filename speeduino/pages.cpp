@@ -522,10 +522,18 @@ static inline uint16_t pageOffsetToEntityOffset(const page_iterator_t &iter, uin
 
 bool setPageValue(uint8_t pageNum, uint16_t pageOffset, byte value)
 {
-  invalidatePageCRC32(pageNum);
   page_iterator_t iter = map_page_offset_to_entity(pageNum, pageOffset);
+  uint16_t entityOffset = pageOffsetToEntityOffset(iter, pageOffset);
 
-  return setEntityValue(iter.entity, pageOffsetToEntityOffset(iter, pageOffset), value);
+  // Writing the value the page already has (TS re-sending a block, a dash writing back what it read) leaves the
+  // cached page CRC valid
+  bool isChanged = getEntityValue(iter.entity, entityOffset)!=value;
+  bool isSet = setEntityValue(iter.entity, entityOffset, value);
+  if (isSet && isChanged)
+  {
+    invalidatePageCRC32(pageNum);
+  }
+  return isSet;
 }
 
 // The part of [pageOffset, pageOffset+length) below 64K: a request with an offset near the top must not wrap around
