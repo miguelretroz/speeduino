@@ -611,7 +611,21 @@ page_iterator_t page_begin(uint8_t pageNum)
 
 page_iterator_t advance(const page_iterator_t &iter)
 {
-    return map_page_offset_to_entity(iter.location.page, iter.entity.start+iter.entity.size);
+    if (EntityType::End==iter.entity.type)
+    {
+        return iter;
+    }
+    // The next map entry directly: looking the next offset up scanned the map from the start, so walking a page cost
+    // the square of its entity count (the 8 trim tables of page 8)
+    page_map_t pageMap = getPageMap(iter.location.page);
+    entity_page_location_t nextLocation = iter.location.next();
+    uint16_t nextStart = iter.entity.start+iter.entity.size;
+    if (nextLocation.index<pageMap.mapSize)
+    {
+        return page_iterator_t(page_entity_t(copyObject_P(&pageMap.searchMap[nextLocation.index]), nextStart), nextLocation);
+    }
+    constexpr entity_t END_ENTITY = entity_t(EntityType::End, 0U);
+    return page_iterator_t(page_entity_t(END_ENTITY, nextStart), nextLocation);
 }
 
 // LCOV_EXCL_STOP
