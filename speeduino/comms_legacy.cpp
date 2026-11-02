@@ -16,6 +16,7 @@ A full copy of the license may be found in the projects root directory
 #include "decoders.h"
 #include "src/controllers/tsCommand/tsCommandController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
+#include "src/controllers/launch/launchController.h"
 #include "pages.h"
 #include "page_crc.h"
 #include "logger.h"
@@ -136,8 +137,9 @@ void legacySerialCommand(void)
       {
         byte cmdGroup = (byte)Serial.read();
         const uint16_t command = word(cmdGroup, primarySerial.read());
-        // Fork: the PID auto tune commands (group 0x40) first
-        if (!handlePidTuneCommand(command, currentStatus, configPage6, configPage15))
+        // Fork: the remote clutch (group 0x41) and the PID auto tune commands (group 0x40) first
+        if (!handleRemoteClutchCommand(command)
+            && !handlePidTuneCommand(command, currentStatus, configPage6, configPage15))
         {
           (void)handleTsCommand(command, currentStatus, configPage2);
         }

@@ -15,6 +15,7 @@ A full copy of the license may be found in the projects root directory
 #include "decoders.h"
 #include "src/controllers/tsCommand/tsCommandController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
+#include "src/controllers/launch/launchController.h"
 #include "pages.h"
 #include "page_crc.h"
 #include "logger.h"
@@ -662,8 +663,9 @@ void processSerialCommand(void)
     }
 
     case 'E': // receive command button commands
-      // Fork: the PID auto tune commands (group 0x40) first
-      if (!handlePidTuneCommand(word(serialPayload[1], serialPayload[2]), currentStatus, configPage6, configPage15))
+      // Fork: the remote clutch (group 0x41) and the PID auto tune commands (group 0x40) first
+      if (!handleRemoteClutchCommand(word(serialPayload[1], serialPayload[2]))
+          && !handlePidTuneCommand(word(serialPayload[1], serialPayload[2]), currentStatus, configPage6, configPage15))
       {
         (void)handleTsCommand(word(serialPayload[1], serialPayload[2]), currentStatus, configPage2);
       }

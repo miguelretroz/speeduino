@@ -6,22 +6,48 @@
 
 TESTABLE_STATIC inputPin_t launchPin;
 
+// Fork: the remote clutch (see launchController.h)
+TESTABLE_STATIC bool remoteClutchHeld = false;
+TESTABLE_STATIC uint32_t remoteClutchUntil = 0U;
+
+TESTABLE_STATIC bool remoteClutchCommandCore(uint16_t command, uint32_t nowMs)
+{
+  if ((command >> 8U) != (TS_CMD_REMOTE_CLUTCH_HOLD >> 8U)) { return false; }
+  if (command == TS_CMD_REMOTE_CLUTCH_HOLD)
+  {
+    remoteClutchHeld = true;
+    remoteClutchUntil = nowMs + REMOTE_CLUTCH_HOLD_MS;
+  }
+  else
+  {
+    remoteClutchHeld = false; // RELEASE, and anything unknown in the group: the safe side
+  }
+  return true;
+}
+
+TESTABLE_STATIC bool remoteClutchActive(uint32_t nowMs)
+{
+  if (remoteClutchHeld && ((int32_t)(nowMs - remoteClutchUntil) >= 0)) { remoteClutchHeld = false; }
+  return remoteClutchHeld;
+}
+
 void __attribute__((optimize("Os"))) initialiseLaunchControl(statuses &current, config6 &page6, const pinNumbers_t &pins)
 {
   launchPin.setPin(pins.pinLaunch);
   page6.flatSEnable = page6.flatSEnable && launchPin.isValid();
   page6.launchEnabled = page6.launchEnabled && launchPin.isValid();
   current.launchStatus = launchStatus_t();
+  remoteClutchHeld = false;
 }
 
-static void updateClutchState(statuses &current, const config6 &page6)
+static void updateClutchState(statuses &current, const config6 &page6, uint32_t nowMs)
 {
   // Only read the shared clutch input when a function using it is enabled.
   if (page6.flatSEnable || page6.launchEnabled)
   {
     current.launchStatus.previousClutchTrigger = current.launchStatus.clutchTrigger;
 
-    current.launchStatus.clutchTrigger = (page6.launchHiLo == launchPin.isPinHigh());
+    current.launchStatus.clutchTrigger = (page6.launchHiLo == launchPin.isPinHigh()) || remoteClutchActive(nowMs);
 
     // Capture RPM on engagement, then retain it while the clutch is held or released.
     if (current.launchStatus.clutchTrigger && !current.launchStatus.previousClutchTrigger)
@@ -83,9 +109,9 @@ static bool aboveFlatShiftSoftRpmLimit(const statuses &current, const config6 &p
   return current.RPM > (current.launchStatus.clutchEngagedRPM - RPM_COARSE.toUser(page6.flatSSoftWin));
 }
 
-TESTABLE_STATIC void updateLaunchFlagsCore(statuses &current, const config2 &page2, const config6 &page6, const config10 &page10, const config15 &page15)
+TESTABLE_STATIC void updateLaunchFlagsCore(statuses &current, const config2 &page2, const config6 &page6, const config10 &page10, const config15 &page15, uint32_t nowMs)
 {
-  updateClutchState(current, page6);
+  updateClutchState(current, page6, nowMs);
 
   bool isLaunching = isLaunchArmed(current, page6, page10)
                   && withinLaunchSpeedLimit(current, page2, page10);
@@ -107,7 +133,12 @@ void updateLaunchAndFlatShift(statuses &current, const config2 &page2, const con
 {
   if (BIT_CHECK(current.LOOP_TIMER, BIT_TIMER_10HZ)) 
   {
-    updateLaunchFlagsCore(current, page2, page6, page10, page15);
+    updateLaunchFlagsCore(current, page2, page6, page10, page15, millis());
   }
+}
+
+bool handleRemoteClutchCommand(uint16_t command)
+{
+  return remoteClutchCommandCore(command, millis());
 }
 // LCOV_EXCL_STOP

@@ -15,6 +15,7 @@ struct launch_fixture
     config10 page10 = {};
     config15 page15 = {};
     pinNumbers_t pins = {};
+    uint32_t now = 1000U; // ms, what updateLaunchFlagsCore sees as millis()
 
     launch_fixture()
     {
@@ -49,8 +50,8 @@ struct launch_fixture
 
     void update()
     {
-        extern void updateLaunchFlagsCore(statuses &current, const config2 &page2, const config6 &page6, const config10 &page10, const config15 &page15);
-        updateLaunchFlagsCore(current, page2, page6, page10, page15);
+        extern void updateLaunchFlagsCore(statuses &current, const config2 &page2, const config6 &page6, const config10 &page10, const config15 &page15, uint32_t nowMs);
+        updateLaunchFlagsCore(current, page2, page6, page10, page15, now);
     }
 
     void armLaunch(void)
