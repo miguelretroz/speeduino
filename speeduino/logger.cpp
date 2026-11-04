@@ -100,7 +100,7 @@ static byte buildStatus4(const statuses &current)
 static byte buildStatus5(const statuses &current)
 {
   bool bits[] = {
-    false, // Unused
+    current.launchStatus.flatShiftingHard, // Fork: was "false // Unused", but the .ini reads bit 0 as flatShiftHardActive
     current.launchStatus.flatShiftingSoft,
     current.secondSparkTableActive,
     current.knockRetardActive,
