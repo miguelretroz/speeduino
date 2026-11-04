@@ -101,11 +101,15 @@ constexpr uint16_t EEPROM_COLDSTART_ATTEMPTS  = 3673;
 // 3668-3671 reserved for the DS3231 cold start counter reset (see docs/cold-start-ds3231-plan.md on its branch)
 constexpr uint16_t EEPROM_PIDADAPT_EGO        = 3667;
 constexpr uint16_t EEPROM_PIDADAPT_IDLE       = 3666;
+constexpr uint16_t EEPROM_VALET_LEVEL         = 3665;
+// 3664 reserved for the active map index of the external map memory (multiple maps, planned)
+constexpr uint16_t EEPROM_FORK_LOWEST         = 3664;
 constexpr uint16_t EEPROM_CALIBRATION_OIL_CRC    = 3564;
 constexpr uint16_t EEPROM_CALIBRATION_OIL_BINS   = EEPROM_CALIBRATION_OIL_CRC+sizeof(uint32_t);
 constexpr uint16_t EEPROM_CALIBRATION_OIL_VALUES = EEPROM_CALIBRATION_OIL_BINS+getCalibrationElementSize(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Bins);
 static_assert(EEPROM_CALIBRATION_OIL_CRC >= EEPROM_CONFIG15_START+sizeof(config15), "Oil calibration overlaps page 15");
-static_assert(EEPROM_CALIBRATION_OIL_VALUES+getCalibrationElementSize(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Values) <= EEPROM_PIDADAPT_IDLE, "Oil calibration overlaps the PID gain adaptation");
+static_assert(EEPROM_CALIBRATION_OIL_VALUES+getCalibrationElementSize(SensorCalibrationTable::OilTempSensor, SensorCalibrationTableElement::Values) <= EEPROM_FORK_LOWEST, "Oil calibration overlaps the Valet level / map index");
+static_assert(EEPROM_VALET_LEVEL < EEPROM_PIDADAPT_IDLE, "Valet level overlaps the PID gain adaptation");
 static_assert(EEPROM_PIDADAPT_EGO < 3668U, "PID gain adaptation overlaps the reserved fork bytes");
 static_assert(EEPROM_COLDSTART_ATTEMPTS < 3674U, "Fork data overlaps the calibration CRCs"); // 3674 == EEPROM_CALIBRATION_CLT_CRC
 
@@ -726,6 +730,15 @@ uint8_t loadPidAdaptEgo(void)
 void savePidAdaptEgo(uint8_t multiplier)
 {
   (void)update(getStorageAPI(), EEPROM_PIDADAPT_EGO, multiplier);
+}
+
+uint8_t loadValetLevel(void)
+{
+  return getStorageAPI().read(EEPROM_VALET_LEVEL);
+}
+void saveValetLevel(uint8_t stored)
+{
+  (void)update(getStorageAPI(), EEPROM_VALET_LEVEL, stored);
 }
 
 uint8_t loadForkConfigVersion(void)

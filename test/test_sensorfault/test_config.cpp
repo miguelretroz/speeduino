@@ -48,7 +48,7 @@ static void test_defaults_on_fresh_eeprom(void)
     doForkUpdates(configPage15);
 
     assert_sensorfault_defaults();
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V5, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
 }
 
 // A board on config version 4: keep the auto tune, oil and cold start settings, add the sensor fault defaults
@@ -69,7 +69,7 @@ static void test_v4_upgrade_adds_sensorfault_defaults(void)
     doForkUpdates(configPage15);
 
     assert_sensorfault_defaults();
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V5, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
     // Untouched
     TEST_ASSERT_EQUAL(1U, configPage15.coldStartEnable);
     TEST_ASSERT_EQUAL(1U, configPage15.oilTempEnable);
@@ -92,7 +92,7 @@ static void test_v3_upgrade_adds_both(void)
 
     assert_sensorfault_defaults();
     TEST_ASSERT_EQUAL(8U, configPage15.pidTuneIdleAmplitude);
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V5, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
 }
 
 static void test_v5_unchanged(void)

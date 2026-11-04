@@ -40,8 +40,8 @@ static void test_live_data_bytes(void)
 
     TEST_ASSERT_EQUAL_HEX8(0x90U, getTSLogEntry(158U));
     TEST_ASSERT_EQUAL_HEX8(0x06U, getTSLogEntry(159U));
-    // Past the end of the fork's bytes
-    TEST_ASSERT_EQUAL_HEX8(0x00U, getTSLogEntry(160U));
+    // Past the end of the fork's bytes (160 is the fork status 2: the Valet, the cold start pump hold, the clutch pin)
+    TEST_ASSERT_EQUAL_HEX8(0x00U, getTSLogEntry(161U));
 }
 
 void testProtectionLog(void)

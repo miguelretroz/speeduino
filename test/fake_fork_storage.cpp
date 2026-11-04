@@ -9,6 +9,7 @@ constexpr uint16_t EEPROM_COLDSTART_ATTEMPTS    = 3673U;
 constexpr uint16_t EEPROM_CALIBRATION_OIL_START = 3564U;
 constexpr uint16_t EEPROM_PIDADAPT_IDLE         = 3666U;
 constexpr uint16_t EEPROM_PIDADAPT_EGO          = 3667U;
+constexpr uint16_t EEPROM_VALET_LEVEL           = 3665U;
 
 fake_fork_storage_t fakeForkStorage;
 
@@ -24,6 +25,7 @@ static byte fakeRead(uint16_t address)
     if (isOilCalibration(address)) { return fakeForkStorage.oilCalibration[address - EEPROM_CALIBRATION_OIL_START]; }
     if (address == EEPROM_PIDADAPT_IDLE) { return fakeForkStorage.pidAdaptIdle; }
     if (address == EEPROM_PIDADAPT_EGO) { return fakeForkStorage.pidAdaptEgo; }
+    if (address == EEPROM_VALET_LEVEL) { return fakeForkStorage.valetLevel; }
     return 0xFFU;
 }
 
@@ -45,6 +47,11 @@ static void fakeWrite(uint16_t address, byte value)
     {
         fakeForkStorage.pidAdaptEgo = value;
         ++fakeForkStorage.pidAdaptWrites;
+    }
+    if (address == EEPROM_VALET_LEVEL)
+    {
+        fakeForkStorage.valetLevel = value;
+        ++fakeForkStorage.valetWrites;
     }
 }
 

@@ -65,7 +65,7 @@ static void test_v4_upgrade_adds_protect_defaults(void)
     doForkUpdates(configPage15);
 
     assert_protect_defaults();
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V5, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
     TEST_ASSERT_EQUAL(20U, configPage15.pidTuneIdleAmplitude);
 }
 
@@ -91,8 +91,8 @@ static void test_protect_ini_offsets(void)
     uint8_t *pBytes = getProtectBytes();
 
     TEST_ASSERT_EQUAL(256U - CONFIG15_PAGE_OFFSET, sizeof(config15));
-    TEST_ASSERT_EQUAL(106U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.Unused15_106_162 - pBase);
-    TEST_ASSERT_EQUAL(57U, sizeof(configPage15.Unused15_106_162));
+    TEST_ASSERT_EQUAL(106U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.Unused15_106_148 - pBase);
+    TEST_ASSERT_EQUAL(43U, sizeof(configPage15.Unused15_106_148));
     TEST_ASSERT_EQUAL(164U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.protFuelPressRpm - pBase);
     TEST_ASSERT_EQUAL(165U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.protFuelPressDelay - pBase);
     TEST_ASSERT_EQUAL(166U - CONFIG15_PAGE_OFFSET, (const uint8_t*)&configPage15.protFuelPressMin - pBase);

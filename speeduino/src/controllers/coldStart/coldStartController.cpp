@@ -76,6 +76,12 @@ void __attribute__((optimize("Os"))) setV2Defaults(config15 &page15)
   page15.coldStartKeyOnReset = 10U;    // 10 minutes
 }
 
+void __attribute__((optimize("Os"))) setV6Defaults(config15 &page15)
+{
+  page15.coldStartManualMaxTime = 50U;                    // 5S per press
+  page15.coldStartManualMaxClt = temperatureAddOffset(40); // Not above 40C
+}
+
 } // namespace details
 
 } // namespace coldStartController
@@ -309,10 +315,52 @@ static bool isPulseOn(const statuses &current, const config15 &page15, uint32_t 
   return elapsed < onTimeMs;
 }
 
+// Fork: the manual hold (see coldStartController.h)
+TESTABLE_STATIC bool coldStartPumpCommandCore(uint16_t command, uint32_t nowMs)
+{
+  if ((command >> 8U) != (TS_CMD_COLD_START_PUMP_HOLD >> 8U)) { return false; }
+  if (command == TS_CMD_COLD_START_PUMP_HOLD)
+  {
+    coldStartState.manualHeld = true;
+    coldStartState.manualUntilMs = nowMs + COLD_START_PUMP_HOLD_MS;
+  }
+  else
+  {
+    coldStartState.manualHeld = false; // RELEASE, and anything unknown in the group: the safe side
+  }
+  return true;
+}
+
+/** @brief Expires the hold, and counts the on time of the current press (cleared when released) */
+static void updateManualHold(uint32_t nowMs)
+{
+  if (coldStartState.manualHeld && ((int32_t)(nowMs - coldStartState.manualUntilMs) >= 0)) { coldStartState.manualHeld = false; }
+  if (!coldStartState.manualHeld) { coldStartState.manualOnMs = 0U; }
+  else if (coldStartState.manualOn)
+  {
+    uint32_t total = coldStartState.manualOnMs + timeElapsed(nowMs, coldStartState.lastUpdateMs);
+    coldStartState.manualOnMs = (uint16_t)(std::min)(total, (uint32_t)UINT16_MAX);
+  }
+  else { /* Held but not on: nothing to count */ }
+}
+
+static bool isManualAllowed(const statuses &current, const config15 &page15)
+{
+  return coldStartState.manualHeld
+      && coldStartState.isKeyOn // USB power alone never injects
+      && isCoolantValid(current, page15)
+      && (current.coolant < temperatureRemoveOffset(page15.coldStartManualMaxClt))
+      && ((uint32_t)coldStartState.manualOnMs < ((uint32_t)page15.coldStartManualMaxTime * 100U));
+}
+
 static bool isOutputRequired(const statuses &current, const config4 &page4, const config15 &page15, uint32_t nowMs)
 {
-  // Throttle held open (flood clear) or battery too low: no cold start fuel in any phase
-  if ((current.TPS >= page4.floodClear) || coldStartState.isBatteryLow) { return false; }
+  // Throttle held open (flood clear) or battery too low: no cold start fuel in any phase (nor by the manual hold)
+  if ((current.TPS >= page4.floodClear) || coldStartState.isBatteryLow)
+  {
+    coldStartState.manualOn = false;
+    return false;
+  }
 
   bool isOn = false;
   switch (coldStartState.phase)
@@ -336,7 +384,8 @@ static bool isOutputRequired(const statuses &current, const config4 &page4, cons
     default:
       break;
   }
-  return isOn;
+  coldStartState.manualOn = !isOn && isManualAllowed(current, page15);
+  return isOn || coldStartState.manualOn;
 }
 
 static void accumulateCrankOnTime(uint32_t nowMs)
@@ -356,6 +405,7 @@ TESTABLE_INLINE_STATIC void coldStartControlCore(statuses &current, const config
     coldStartState.isKeyOn = isKeyOn(current, page15);
     coldStartState.isBatteryLow = isBatteryLow(current, page15);
     accumulateCrankOnTime(nowMs);
+    updateManualHold(nowMs);
     updateCounterResets(current, page15, nowMs);
     coldStartState.phase = nextPhase(current, page15, nowMs, !wasKeyOn && coldStartState.isKeyOn);
 
@@ -378,9 +428,19 @@ uint8_t getColdStartLogStatus(void)
                  | (uint8_t)((coldStartState.isBatteryLow ? 1U : 0U) << 5U));
 }
 
+bool coldStartManualActive(void)
+{
+  return coldStartState.manualOn && coldStartState.isOutputOn;
+}
+
 // LCOV_EXCL_START
 void coldStartControl(statuses &current, const config4 &page4, const config15 &page15)
 {
   coldStartControlCore(current, page4, page15, millis());
+}
+
+bool handleColdStartPumpCommand(uint16_t command)
+{
+  return coldStartPumpCommandCore(command, millis());
 }
 // LCOV_EXCL_STOP

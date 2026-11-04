@@ -16,6 +16,8 @@
 #include "src/controllers/pidTune/pidTuneController.h"
 #include "src/controllers/sensorFault/sensorFaultController.h"
 #include "src/controllers/protection/protectionController.h"
+#include "src/controllers/launch/launchController.h"
+#include "src/controllers/valet/valetController.h"
 
 static byte setStatusBit(byte status, uint8_t index, bool bit)
 {
@@ -110,6 +112,18 @@ static byte buildStatus5(const statuses &current)
     current.coldStartLocked,
   };
   return setStatusBits(0U, bits);
+}
+
+// Fork: the second fork status byte (realtime byte 160, forkStatus2 in the .ini)
+// - Bits 0-1: Valet level (0 = off), bit 2: the level is pending (waits for the RPM to drop)
+// - Bit 3: the cold start output is on because of the manual hold
+// - Bit 4: the clutch input pin alone (without the remote clutch)
+static byte getForkStatus2(void)
+{
+  return (byte)((valetLevel() & 0x03U)
+              | (valetPending() ? 0x04U : 0U)
+              | (coldStartManualActive() ? 0x08U : 0U)
+              | (isClutchPinPressed() ? 0x10U : 0U));
 }
 
 byte buildEngineStatus(const statuses &current)
@@ -390,6 +404,7 @@ byte getTSLogEntry(uint16_t byteNum)
     case 157: statusValue = getSensorFaultLogStatus(currentStatus, configPage15); break; // Fork specific
     case 158: statusValue = getProtectionLogReason(); break; // Fork specific
     case 159: statusValue = getProtectionLogState(); break; // Fork specific
+    case 160: statusValue = getForkStatus2(); break; // Fork specific
     default: statusValue = 0; // MISRA check
   }
 

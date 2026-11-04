@@ -7,6 +7,7 @@
 #include "../../pwm/PwmOutputChannel.h"
 #include "src/pins/boardOutputPin.h"
 #include "src/pwm/interruptHandlers.h"
+#include "../valet/valetController.h"
 
 TESTABLE_STATIC PwmOutputChannel<boardOutputPin_t> boostOutput;
 TESTABLE_STATIC integerPID_ideal boostPID; //This is the PID object if that algorithm is used. Needs to be global as it maintains state outside of each function call
@@ -208,6 +209,8 @@ TESTABLE_STATIC void boostControlCore(statuses &current, const config2 &page2, c
     if(page4.boostType == OPEN_LOOP_BOOST)
     {
       current.boostDuty = getBoostDuty(current, page2, page9);
+      // Fork: at the Valet boost limit, duty 0 leaves the wastegate on its spring (see valetController.h)
+      if (valetBoostOverLimit((uint16_t)current.MAP, page15)) { current.boostDuty = 0; }
     }
     else // CLOSED_LOOP_BOOST
     {
@@ -218,7 +221,7 @@ TESTABLE_STATIC void boostControlCore(statuses &current, const config2 &page2, c
       // LCOV_EXCL_BR_STOP
       { 
         current.flexBoostCorrection = getFlexCorrection(current, page2);
-        current.boostTarget = getBoostTarget(current, page2, page9);
+        current.boostTarget = valetBoostTarget(getBoostTarget(current, page2, page9), page15); // Fork: capped by the Valet
         current.boostDuty = convertTargetToDuty(current, page2, page6, page10);
       } 
 

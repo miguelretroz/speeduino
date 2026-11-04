@@ -156,6 +156,11 @@ uint8_t loadPidAdaptEgo(void);
 /** @copydoc loadPidAdaptEgo */
 void savePidAdaptEgo(uint8_t multiplier);
 
+/** @brief Valet level as stored (see valetController.cpp for the encoding). Survives power cycles. */
+uint8_t loadValetLevel(void);
+/** @copydoc loadValetLevel */
+void saveValetLevel(uint8_t stored);
+
 /** @brief Version of the fork specific config. The upstream data version can't be used for it. */
 uint8_t loadForkConfigVersion(void);
 /** @copydoc loadForkConfigVersion */

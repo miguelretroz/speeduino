@@ -17,6 +17,8 @@ A full copy of the license may be found in the projects root directory
 #include "src/controllers/tsCommand/tsCommandController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
 #include "src/controllers/launch/launchController.h"
+#include "src/controllers/valet/valetController.h"
+#include "src/controllers/coldStart/coldStartController.h"
 #include "pages.h"
 #include "page_crc.h"
 #include "logger.h"
@@ -137,8 +139,11 @@ void legacySerialCommand(void)
       {
         byte cmdGroup = (byte)Serial.read();
         const uint16_t command = word(cmdGroup, primarySerial.read());
-        // Fork: the remote clutch (group 0x41) and the PID auto tune commands (group 0x40) first
+        // Fork: the remote clutch (group 0x41), the Valet (0x43), the cold start pump (0x42) and the PID auto tune
+        // commands (group 0x40) first
         if (!handleRemoteClutchCommand(command)
+            && !handleValetCommand(command)
+            && !handleColdStartPumpCommand(command)
             && !handlePidTuneCommand(command, currentStatus, configPage6, configPage15))
         {
           (void)handleTsCommand(command, currentStatus, configPage2);

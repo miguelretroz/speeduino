@@ -17,6 +17,8 @@ struct fake_fork_storage_t
     uint8_t pidAdaptIdle = 0xFFU; ///< PID gain adaptation multipliers
     uint8_t pidAdaptEgo = 0xFFU;
     uint16_t pidAdaptWrites = 0U;
+    uint8_t valetLevel = 0xFFU;   ///< Valet level (marked, see valetController.cpp)
+    uint16_t valetWrites = 0U;
 };
 extern fake_fork_storage_t fakeForkStorage;
 
@@ -29,5 +31,6 @@ constexpr uint8_t FORK_CONFIG_V2 = 0xC6U;
 constexpr uint8_t FORK_CONFIG_V3 = 0xC7U;
 constexpr uint8_t FORK_CONFIG_V4 = 0xC8U;
 constexpr uint8_t FORK_CONFIG_V5 = 0xC9U;
+constexpr uint8_t FORK_CONFIG_V6 = 0xCAU;
 /** @brief The version every board ends up on */
-constexpr uint8_t FORK_CONFIG_LATEST = FORK_CONFIG_V5;
+constexpr uint8_t FORK_CONFIG_LATEST = FORK_CONFIG_V6;

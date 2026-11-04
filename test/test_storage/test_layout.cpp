@@ -291,6 +291,19 @@ static void assert_fork_byte_no_overlap(uint16_t address) {
     TEST_ASSERT_LESS_THAN_UINT16(3668U, address);
 }
 
+static void test_valet_level_no_overlap(void) {
+    const storage_api_t original = getStorageAPI();
+    setStorageAPI({ .read = recordingRead, .write = recordingWrite, .length = recordingLength, .getMaxWriteBlockSize = recordingWriteBlockSize });
+    lastWriteAddress = 0U;
+    saveValetLevel(0xA1U);
+    const uint16_t address = lastWriteAddress;
+    setStorageAPI(original);
+
+    TEST_ASSERT_EQUAL_UINT16(3665U, address);
+    assert_fork_byte_no_overlap(address);
+    assert_fork_byte_no_overlap(3664U); // Reserved for the map index of the external map memory
+}
+
 static void test_pid_adaptation_no_overlap(void) {
     const storage_api_t original = getStorageAPI();
     setStorageAPI({ .read = recordingRead, .write = recordingWrite, .length = recordingLength, .getMaxWriteBlockSize = recordingWriteBlockSize });
@@ -316,6 +329,7 @@ void test_layout(void) {
         RUN_TEST_P(test_no_entity_overlap);
         RUN_TEST_P(test_oil_calibration_no_overlap);
         RUN_TEST_P(test_pid_adaptation_no_overlap);
+        RUN_TEST_P(test_valet_level_no_overlap);
         RUN_TEST_P(print_eeprom_layout);
     }
 }

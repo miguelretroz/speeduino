@@ -39,6 +39,7 @@
 #include "src/controllers/tacho/tachoController.h"
 #include "src/controllers/launch/launchController.h"
 #include "src/controllers/coldStart/coldStartController.h"
+#include "src/controllers/valet/valetController.h"
 #include "src/controllers/oilTemp/oilTempController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
 #include "src/controllers/sensorFault/sensorFaultController.h"
@@ -189,6 +190,7 @@ void initialiseAll(void)
     initialiseBoost(currentStatus, configPage2, configPage6, configPage10, pinNumbers);
     initialiseAirCon(currentStatus, configPage15, pinNumbers);
     initialiseColdStart(currentStatus, configPage15, pinNumbers);
+    initialiseValet();
     initialiseOilTemp(configPage15, pinNumbers);
     initialiseProtection(configPage15, pinNumbers);
     initialiseNitrous();

@@ -924,8 +924,16 @@ struct config15 : public config_page_t {
   int8_t rollingProtRPMDelta[4]; // Signed RPM value representing how much below the RPM limit. Divided by 10
   byte rollingProtCutPercent[4];
   
-  //Bytes 106-162
-  byte Unused15_106_162[57];
+  //Bytes 106-148
+  byte Unused15_106_148[43];
+
+  //Bytes 149-162 - Fork specific: Valet mode (see valetController.h) and the manual cold start pump hold
+  byte valetRevLimit[3];          ///< Max RPM of the Valet levels 1-3 (Unit: 100 RPM). 0 = no limit
+  byte valetBoostLimit[3];        ///< Max boost of the Valet levels 1-3 (Unit: 1 kPa, absolute). 0 = no limit
+  byte valetIgnRetard[3];         ///< Ignition retard of the Valet levels 1-3 (Unit: 1 degree)
+  byte valetFlags[3];             ///< Bit 0: launch allowed, bit 1: flat shift allowed
+  byte coldStartManualMaxTime;    ///< Manual cold start pump hold: max on time per press (Unit: 0.1S)
+  byte coldStartManualMaxClt;     ///< Manual cold start pump hold: only below this coolant temperature (+40 offset)
 
   //Bytes 163-171 - Fork specific: engine protection actions, memory and warning output (see protectionController.h)
   byte protWarnPin : 6;             ///< Warning output (light/buzzer), on while a protection or a sensor fault is active. 0 = none

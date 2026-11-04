@@ -36,6 +36,7 @@ There are 2 top level functions that call more detailed corrections for Fuel and
 #include "fuel_calcs.h"
 #include "unit_testing.h"
 #include "src/controllers/pidTune/pidTuneController.h"
+#include "src/controllers/valet/valetController.h"
 
 /** Instance of the PID object in case that algorithm is used (Always instantiated).
 * Needs to be global as it maintains state outside of each function call.
@@ -1043,7 +1044,8 @@ TESTABLE_INLINE_STATIC int8_t correctionSoftRevLimit(int8_t advance)
 
   if (configPage6.engineProtectType == PROTECT_CUT_IGN || configPage6.engineProtectType == PROTECT_CUT_BOTH) 
   {
-    if (currentStatus.RPMdiv100 >= configPage4.SoftRevLim) //Softcut RPM limit
+    // Fork: the Valet lowers the soft limit with its RPM limit (see valetController.h)
+    if (currentStatus.RPMdiv100 >= valetSoftRevLimit(configPage4.SoftRevLim, configPage4.HardRevLim, configPage15)) //Softcut RPM limit
     {
       currentStatus.softLimitActive = true;
       if( softLimitTime < configPage4.SoftLimMax )
@@ -1062,6 +1064,14 @@ TESTABLE_INLINE_STATIC int8_t correctionSoftRevLimit(int8_t advance)
   }
 
   return advance;
+}
+
+/** Fork: the Valet ignition retard (see valetController.h). Before the soft limit, like the idle advance.
+ */
+TESTABLE_INLINE_STATIC int8_t correctionValetRetard(int8_t advance)
+{
+  int16_t retarded = (int16_t)advance - (int16_t)valetIgnRetard(configPage15);
+  return (int8_t)((retarded < INT8_MIN) ? INT8_MIN : retarded);
 }
 
 /** Ignition Nitrous oxide correction.
@@ -1342,6 +1352,7 @@ int8_t correctionsIgn(int8_t base_advance)
   advance = correctionIATretard(advance);
   advance = correctionCLTadvance(advance);
   advance = correctionIdleAdvance(advance);
+  advance = correctionValetRetard(advance);
   advance = correctionSoftRevLimit(advance);
   advance = correctionNitrous(advance);
   advance = correctionSoftLaunch(advance);

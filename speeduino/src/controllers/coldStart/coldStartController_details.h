@@ -64,6 +64,10 @@ namespace details {
     holdTimer_t runningTimer;        ///< Engine running: clears the counter
     holdTimer_t keyOnTimer;          ///< Key on with the engine stopped: clears the counter
     holdTimer_t resetGestureTimer;   ///< Throttle held open with the engine stopped: clears the counter
+    bool manualHeld = false;         ///< Manual hold: a HOLD command not expired yet
+    bool manualOn = false;           ///< The output is on because of the manual hold
+    uint32_t manualUntilMs = 0U;
+    uint16_t manualOnMs = 0U;        ///< On time of the current press (cleared on release)
   };
 
   /** @brief The dose (%) for the next attempt, given the number of attempts already made */
@@ -74,6 +78,9 @@ namespace details {
 
   /** @brief Defaults for the fields added in config version 2 (low battery cut and key on reset) */
   void setV2Defaults(config15 &page15);
+
+  /** @brief Defaults for the fields added in config version 6 (the manual pump hold) */
+  void setV6Defaults(config15 &page15);
 
 } // namespace details
 

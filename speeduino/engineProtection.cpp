@@ -8,6 +8,7 @@
 #include "decoder_init.h"
 #include "units.h"
 #include "preprocessor.h"
+#include "src/controllers/valet/valetController.h"
 
 TESTABLE_STATIC uint32_t oilProtEndTime;
 TESTABLE_STATIC bool oilProtTimerStarted = false;
@@ -58,9 +59,13 @@ TESTABLE_INLINE_STATIC bool checkOilPressureLimit(const statuses &current, const
 
 TESTABLE_INLINE_STATIC bool checkBoostLimit(const statuses &current, const config6 &page6)
 {
+  // Fork: with the Valet on, the boost cut acts 20 kPa above its boost limit if that is lower (see valetController.h)
+  uint16_t limit = MAP.toUser(page6.boostLimit);
+  uint8_t valetLimit = valetBoostLimit(configPage15);
+  if ((valetLimit != 0U) && (((uint16_t)valetLimit + 20U) < limit)) { limit = (uint16_t)valetLimit + 20U; }
   return (page6.engineProtectType != PROTECT_CUT_OFF)
       && (page6.boostCutEnabled) 
-      && (current.MAP > MAP.toUser(page6.boostLimit));
+      && (current.MAP > limit);
 }
 
 static inline bool canApplyAfrLimit(const config6 &page6, const config9 &page9)
@@ -226,6 +231,13 @@ TESTABLE_INLINE_STATIC uint8_t applyHardLaunchRevLimit(uint8_t curLimit, const s
   return curLimit;
 }
 
+// Fork: the Valet RPM limit (see valetController.h)
+static inline uint8_t applyValetRevLimit(uint8_t curLimit)
+{
+  uint8_t limit = valetRevLimit(configPage15);
+  return ((limit != 0U) && (limit < curLimit)) ? limit : curLimit;
+}
+
 TESTABLE_INLINE_STATIC uint16_t applyFlatShiftRevLimit(uint16_t curLimit, const statuses &current)
 {
   if ( current.launchStatus.flatShiftingHard ) 
@@ -241,9 +253,10 @@ TESTABLE_INLINE_STATIC uint16_t getMaxRpm(const statuses &current, const config4
   // Divided by 100.
   return applyFlatShiftRevLimit(
           RPM_COARSE.toUser(applyHardLaunchRevLimit(
-                              applyEngineProtectionRevLimit(
-                                getHardRevLimit(current, page4, page9), 
-                                current, page4),
+                              applyValetRevLimit(
+                                applyEngineProtectionRevLimit(
+                                  getHardRevLimit(current, page4, page9), 
+                                  current, page4)),
                               current, page6)),
             current);
   
@@ -483,6 +496,11 @@ BEGIN_LTO_ALWAYS_INLINE(statuses::scheduler_cut_t) calculateFuelIgnitionChannelC
     {
       // Nothing to do - default CUT_NONE will apply no cuts
     }
+  }
+  else if ((valetRevLimit(configPage15) != 0U) && (current.RPM >= RPM_COARSE.toUser(valetRevLimit(configPage15))))
+  {
+    // Fork: with the engine protection Off, the Valet RPM limit still cuts — by ignition only, full cut (the driver's choice: never fuel)
+    cutState = CUT_FULL_IGN;
   }
   else
   {

@@ -1618,7 +1618,102 @@ static void test_RollingCut_masks_unused(void)
     TEST_ASSERT_EQUAL(SchedulerCutStatus::Rolling, cut.status);
 }
 
- void runAllTests(void)
+ // Fork: the Valet RPM limit (see valetController.h): one more limit in getMaxRpm, and with the engine protection
+// Off it still cuts, by ignition only (full cut). The boost cut acts 20 kPa above the Valet boost limit.
+#include "src/controllers/valet/valetController_details.h"
+#include "globals.h"
+extern valet::details::state_t valetState;
+
+static void valetOn(uint8_t level, uint8_t revLimit, uint8_t boostLimit)
+{
+    valetState.level = valetState.inForce = level;
+    configPage15.valetRevLimit[level - 1U] = revLimit;
+    configPage15.valetBoostLimit[level - 1U] = boostLimit;
+}
+static void valetOff(void) { valetState = valet::details::state_t(); }
+
+static void test_valet_getMaxRpm(void)
+{
+    engineProtection_test_context_t context;
+    context.setRpmActive(HARD_REV_FIXED); // 8000 RPM
+    TEST_ASSERT_EQUAL_UINT16(8000U, getMaxRpm(context.current, context.page4, context.page6, context.page9));
+    valetOn(3U, 30U, 0U);
+    TEST_ASSERT_EQUAL_UINT16(3000U, getMaxRpm(context.current, context.page4, context.page6, context.page9));
+    configPage15.valetRevLimit[2] = 90U; // above the tune's: the tune's
+    TEST_ASSERT_EQUAL_UINT16(8000U, getMaxRpm(context.current, context.page4, context.page6, context.page9));
+    configPage15.valetRevLimit[2] = 0U;  // no limit
+    TEST_ASSERT_EQUAL_UINT16(8000U, getMaxRpm(context.current, context.page4, context.page6, context.page9));
+    valetOff();
+}
+
+static void test_valet_cut_with_protection(void)
+{
+    engineProtection_test_context_t context;
+    context.setHardCutFull();
+    context.setRpmActive(HARD_REV_FIXED);
+    context.page6.engineProtectType = PROTECT_CUT_BOTH;
+    valetOn(2U, 40U, 0U);
+    context.current.setRpm(4000U);
+    auto cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL_HEX8(0x00, cut.fuelChannels); // the tune's cut type
+    TEST_ASSERT_EQUAL_HEX8(0x00, cut.ignitionChannels);
+    TEST_ASSERT_EQUAL(SchedulerCutStatus::Full, cut.status);
+    context.current.setRpm(3900U);
+    context.current.schedulerCutState = { 0x00, 0xFF, 0xFF, SchedulerCutStatus::None };
+    cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL(SchedulerCutStatus::None, cut.status);
+    valetOff();
+}
+
+static void test_valet_cut_protection_off(void)
+{
+    engineProtection_test_context_t context;
+    context.setHardCutFull();
+    context.page6.engineProtectType = PROTECT_CUT_OFF;
+    context.page4.HardRevLim = 80;
+    context.current.setRpm(5000U);
+    auto cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL(SchedulerCutStatus::None, cut.status); // protection Off: no rev cut at all
+    valetOn(1U, 45U, 0U);
+    cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL_HEX8(0xFF, cut.fuelChannels);     // the fuel stays on (never a fuel cut)
+    TEST_ASSERT_EQUAL_HEX8(0x00, cut.ignitionChannels); // ignition cut
+    TEST_ASSERT_EQUAL(SchedulerCutStatus::Full, cut.status);
+    context.current.setRpm(4499U);
+    cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL(SchedulerCutStatus::None, cut.status);
+    context.setSyncStatus(SyncStatus::None);
+    cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL_HEX8(0x00, cut.fuelChannels); // no sync still cuts both, as always
+    valetOff();
+}
+
+static void test_valet_boost_cut(void)
+{
+    engineProtection_test_context_t context;
+    context.page6.engineProtectType = PROTECT_CUT_IGN;
+    context.page6.boostCutEnabled = 1;
+    context.page6.boostLimit = 100; // 200 kPa
+    context.current.MAP = 150;
+    TEST_ASSERT_FALSE(checkBoostLimit(context.current, context.page6));
+    valetOn(1U, 0U, 120U); // the cut at 140 kPa
+    TEST_ASSERT_TRUE(checkBoostLimit(context.current, context.page6));
+    context.current.MAP = 140;
+    TEST_ASSERT_FALSE(checkBoostLimit(context.current, context.page6));
+    valetOff();
+}
+
+void testValetProtection(void)
+{
+    SET_UNITY_FILENAME() {
+        RUN_TEST_P(test_valet_getMaxRpm);
+        RUN_TEST_P(test_valet_cut_with_protection);
+        RUN_TEST_P(test_valet_cut_protection_off);
+        RUN_TEST_P(test_valet_boost_cut);
+    }
+}
+
+void runAllTests(void)
 {
     SET_UNITY_FILENAME() {
 
@@ -1685,6 +1780,7 @@ static void test_RollingCut_masks_unused(void)
     RUN_TEST_P(test_NoCut_masks_unused);
     RUN_TEST_P(test_RollingCut_masks_unused);
     }
+    testValetProtection();
 }
 
 TEST_HARNESS(runAllTests)

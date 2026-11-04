@@ -63,6 +63,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "src/controllers/nitrous/nitrousController.h"
 #include "src/controllers/auxChannels/auxChannelController.h"
 #include "src/controllers/coldStart/coldStartController.h"
+#include "src/controllers/valet/valetController.h"
 #include "src/controllers/pidTune/pidTuneController.h"
 #include "src/controllers/sensorFault/sensorFaultController.h"
 #include "src/controllers/protection/protectionController.h"
@@ -249,6 +250,7 @@ BEGIN_LTO_ALWAYS_INLINE(void) loop(void)
 
     fuelPumpControl(currentStatus, configPage2);
     coldStartControl(currentStatus, configPage4, configPage15);
+    valetUpdate(currentStatus, configPage15); // Fork: a pending Valet level comes in once the RPM drops
 
     //***Perform sensor reads***
     //-----------------------------------------------------------------------------------------------------

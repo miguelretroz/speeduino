@@ -168,3 +168,59 @@ void testRemoteClutch(void)
         RUN_TEST_P(test_millisWrap);
     }
 }
+
+// Fork: a Valet level can block launch and flat shift (valetFlags), and the clutch pin alone is exposed for the
+// transmitter's start interlock (the remote clutch doesn't count there).
+#include "src/controllers/valet/valetController_details.h"
+extern valet::details::state_t valetState;
+
+static void test_valetBlocksLaunchAndFlatShift(void)
+{
+    launch_fixture fixture;
+    fixture.init();
+    valetState.level = valetState.inForce = 2U;
+    fixture.page15.valetFlags[1] = 0x00U;
+    fixture.armHardLaunch();
+    fixture.update();
+    TEST_ASSERT_FALSE(fixture.current.launchStatus.launchingHard);
+    fixture.page15.valetFlags[1] = 0x01U; // launch allowed in this level
+    fixture.update();
+    TEST_ASSERT_TRUE(fixture.current.launchStatus.launchingHard);
+
+    fixture.setClutch(false);
+    fixture.update();
+    fixture.page15.valetFlags[1] = 0x00U;
+    fixture.armFlatShift();
+    fixture.current.setRpm(RPM_COARSE.toUser(fixture.page6.flatSArm) + 3);
+    fixture.update();
+    fixture.current.setRpm(fixture.current.launchStatus.clutchEngagedRPM + 200);
+    fixture.update();
+    TEST_ASSERT_FALSE(fixture.current.launchStatus.flatShiftingHard);
+    fixture.page15.valetFlags[1] = 0x02U; // flat shift allowed
+    fixture.update();
+    TEST_ASSERT_TRUE(fixture.current.launchStatus.flatShiftingHard);
+    valetState = valet::details::state_t();
+}
+
+static void test_clutchPinAlone(void)
+{
+    launch_fixture fixture;
+    fixture.init();
+    fixture.setClutch(true);
+    fixture.update();
+    TEST_ASSERT_TRUE(isClutchPinPressed());
+    fixture.setClutch(false);
+    (void)remoteClutchCommandCore(TS_CMD_REMOTE_CLUTCH_HOLD, fixture.now);
+    fixture.update();
+    TEST_ASSERT_TRUE(fixture.current.launchStatus.clutchTrigger); // the remote clutch engages launch / flat shift...
+    TEST_ASSERT_FALSE(isClutchPinPressed());                       // ...but isn't the pin
+    releaseRemote();
+}
+
+void testValetLaunch(void)
+{
+    SET_UNITY_FILENAME() {
+        RUN_TEST_P(test_valetBlocksLaunchAndFlatShift);
+        RUN_TEST_P(test_clutchPinAlone);
+    }
+}

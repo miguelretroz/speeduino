@@ -9,6 +9,7 @@
 #include "src/controllers/pidTune/pidTuneController_details.h"
 #include "src/controllers/sensorFault/sensorFaultController_details.h"
 #include "src/controllers/protection/protectionController_details.h"
+#include "src/controllers/valet/valetController_details.h"
 
 // Fork config versions. Not small numbers, so a blank or random EEPROM byte is unlikely to match one.
 static constexpr uint8_t FORK_CONFIG_V1 = 0xC5U; // Cold start (page 15 bytes 206-255)
@@ -16,6 +17,7 @@ static constexpr uint8_t FORK_CONFIG_V2 = 0xC6U; // Cold start low battery cut a
 static constexpr uint8_t FORK_CONFIG_V3 = 0xC7U; // Oil temperature (bytes 198-203 and the oil calibration table)
 static constexpr uint8_t FORK_CONFIG_V4 = 0xC8U; // PID auto tune and gain adaptation (bytes 186-196)
 static constexpr uint8_t FORK_CONFIG_V5 = 0xC9U; // Sensor fault detection and engine protection actions (bytes 163-185)
+static constexpr uint8_t FORK_CONFIG_V6 = 0xCAU; // Valet mode and the manual cold start pump hold (bytes 149-162)
 
 static void __attribute__((optimize("Os"))) upgradeToV2(config15 &page15)
 {
@@ -44,10 +46,17 @@ static void __attribute__((optimize("Os"))) upgradeToV5(config15 &page15)
   protection::details::setDefaults(page15);
 }
 
+static void __attribute__((optimize("Os"))) upgradeToV6(config15 &page15)
+{
+  valet::details::setDefaults(page15);
+  coldStartController::details::setV6Defaults(page15);
+  // The Valet level (EEPROM 3665) starts off: a blank or random byte already reads as off
+}
+
 void __attribute__((optimize("Os"))) doForkUpdates(config15 &page15)
 {
   uint8_t version = loadForkConfigVersion();
-  if (version == FORK_CONFIG_V5) { return; }
+  if (version == FORK_CONFIG_V6) { return; }
 
   if (version == FORK_CONFIG_V1)
   {
@@ -67,6 +76,11 @@ void __attribute__((optimize("Os"))) doForkUpdates(config15 &page15)
   if (version == FORK_CONFIG_V4)
   {
     upgradeToV5(page15);
+    version = FORK_CONFIG_V5;
+  }
+  if (version == FORK_CONFIG_V5)
+  {
+    upgradeToV6(page15);
   }
   else
   {
@@ -76,8 +90,9 @@ void __attribute__((optimize("Os"))) doForkUpdates(config15 &page15)
     upgradeToV3(page15);
     upgradeToV4(page15);
     upgradeToV5(page15);
+    upgradeToV6(page15);
   }
 
   savePage(boostvvtPage2);
-  saveForkConfigVersion(FORK_CONFIG_V5);
+  saveForkConfigVersion(FORK_CONFIG_V6);
 }

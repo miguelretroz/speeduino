@@ -19,3 +19,7 @@ constexpr uint16_t REMOTE_CLUTCH_HOLD_MS        = 400U;
 /** @brief Handles an 'E' command. Returns false when it is not from the remote clutch group (0x41). */
 bool handleRemoteClutchCommand(uint16_t command);
 /** @} */
+
+/** @brief Fork: the clutch input pin alone, without the remote clutch (for the transmitter's start interlock).
+ * Read along with the clutch input: only while launch or flat shift is enabled. */
+bool isClutchPinPressed(void);
