@@ -1619,7 +1619,8 @@ static void test_RollingCut_masks_unused(void)
 }
 
  // Fork: the Valet RPM limit (see valetController.h): one more limit in getMaxRpm, and with the engine protection
-// Off it still cuts, by ignition only (full cut). The boost cut acts 20 kPa above the Valet boost limit.
+// Off it still cuts, by ignition only (full cut). The Valet boost limit has a cut of its own, at any RPM.
+#include "src/controllers/valet/valetController.h"
 #include "src/controllers/valet/valetController_details.h"
 #include "globals.h"
 extern valet::details::state_t valetState;
@@ -1688,18 +1689,69 @@ static void test_valet_cut_protection_off(void)
     valetOff();
 }
 
-static void test_valet_boost_cut(void)
+// The protection's boost cut doesn't look at the Valet any more (it used to act 20 kPa above the Valet limit)
+static void test_valet_boost_not_protection(void)
 {
     engineProtection_test_context_t context;
     context.page6.engineProtectType = PROTECT_CUT_IGN;
     context.page6.boostCutEnabled = 1;
     context.page6.boostLimit = 100; // 200 kPa
     context.current.MAP = 150;
+    valetOn(1U, 0U, 20U);
     TEST_ASSERT_FALSE(checkBoostLimit(context.current, context.page6));
-    valetOn(1U, 0U, 120U); // the cut at 140 kPa
-    TEST_ASSERT_TRUE(checkBoostLimit(context.current, context.page6));
-    context.current.MAP = 140;
-    TEST_ASSERT_FALSE(checkBoostLimit(context.current, context.page6));
+    valetOff();
+}
+
+// A full Valet boost cut: at any RPM (far below the rev limits), the protection's cut type; with it Off, ignition only
+static void test_valet_boost_cut_full(void)
+{
+    engineProtection_test_context_t context;
+    context.setHardCutFull();
+    context.setRpmActive(HARD_REV_FIXED);
+    context.page6.engineProtectType = PROTECT_CUT_BOTH;
+    context.current.setRpm(2000U);
+    valetOn(3U, 0U, 0U);
+    valetState.boostCutPct = VALET_CUT_FULL;
+    auto cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL_HEX8(0x00, cut.fuelChannels);
+    TEST_ASSERT_EQUAL_HEX8(0x00, cut.ignitionChannels);
+    TEST_ASSERT_EQUAL(SchedulerCutStatus::Full, cut.status);
+    context.page6.engineProtectType = PROTECT_CUT_OFF;
+    cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL_HEX8(0xFF, cut.fuelChannels); // never a fuel cut
+    TEST_ASSERT_EQUAL_HEX8(0x00, cut.ignitionChannels);
+    TEST_ASSERT_EQUAL(SchedulerCutStatus::Full, cut.status);
+    valetState.boostCutPct = 0U;
+    cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+    TEST_ASSERT_EQUAL(SchedulerCutStatus::None, cut.status);
+    valetOff();
+}
+
+// A partial Valet boost cut: the rolling cut with its share (all or none of the channels, with a fixed dice)
+static void test_valet_boost_cut_rolling(void)
+{
+    engineProtection_test_context_t context;
+    context.setHardCutFull();
+    context.setRpmActive(HARD_REV_FIXED);
+    context.page6.engineProtectType = PROTECT_CUT_IGN;
+    context.current.setRpm(2000U);
+    valetOn(3U, 0U, 0U);
+    valetState.boostCutPct = 25U;
+    {
+        rollingCutRandFunc_override_t guard(deterministic_rand_low);
+        rollingCutLastRev = context.current.startRevolutions - 5;
+        auto cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+        TEST_ASSERT_EQUAL(SchedulerCutStatus::Rolling, cut.status);
+        TEST_ASSERT_EQUAL_HEX8(0x00, cut.ignitionChannels);
+        TEST_ASSERT_EQUAL_HEX8(0xFF, cut.fuelChannels);
+    }
+    {
+        rollingCutRandFunc_override_t guard(deterministic_rand_high);
+        rollingCutLastRev = context.current.startRevolutions - 5;
+        auto cut = calculateFuelIgnitionChannelCut(context.current, context.page2, context.page4, context.page6, context.page9);
+        TEST_ASSERT_EQUAL(SchedulerCutStatus::Rolling, cut.status);
+        TEST_ASSERT_EQUAL_HEX8(0xFF, cut.ignitionChannels);
+    }
     valetOff();
 }
 
@@ -1709,7 +1761,9 @@ void testValetProtection(void)
         RUN_TEST_P(test_valet_getMaxRpm);
         RUN_TEST_P(test_valet_cut_with_protection);
         RUN_TEST_P(test_valet_cut_protection_off);
-        RUN_TEST_P(test_valet_boost_cut);
+        RUN_TEST_P(test_valet_boost_not_protection);
+        RUN_TEST_P(test_valet_boost_cut_full);
+        RUN_TEST_P(test_valet_boost_cut_rolling);
     }
 }
 

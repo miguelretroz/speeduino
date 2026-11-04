@@ -929,7 +929,7 @@ struct config15 : public config_page_t {
 
   //Bytes 149-162 - Fork specific: Valet mode (see valetController.h) and the manual cold start pump hold
   byte valetRevLimit[3];          ///< Max RPM of the Valet levels 1-3 (Unit: 100 RPM). 0 = no limit
-  byte valetBoostLimit[3];        ///< Max boost of the Valet levels 1-3 (Unit: 1 kPa, absolute). 0 = no limit
+  byte valetBoostLimit[3];        ///< Max boost of the Valet levels 1-3 (Unit: 1 kPa above the ambient pressure). 0 = no boost, 255 = no limit
   byte valetIgnRetard[3];         ///< Ignition retard of the Valet levels 1-3 (Unit: 1 degree)
   byte valetFlags[3];             ///< Bit 0: launch allowed, bit 1: flat shift allowed
   byte coldStartManualMaxTime;    ///< Manual cold start pump hold: max on time per press (Unit: 0.1S)

@@ -19,7 +19,7 @@ namespace details {
 void __attribute__((optimize("Os"))) setDefaults(config15 &page15)
 {
   constexpr uint8_t revLimit[VALET_LEVELS] = { 50U, 40U, 30U };      // 5000 / 4000 / 3000 RPM
-  constexpr uint8_t boostLimit[VALET_LEVELS] = { 150U, 120U, 100U }; // kPa: ~0.5 bar, ~0.2 bar, no boost
+  constexpr uint8_t boostLimit[VALET_LEVELS] = { 50U, 20U, 0U };     // kPa above the ambient: 0.5 bar, 0.2 bar, no boost
   constexpr uint8_t ignRetard[VALET_LEVELS] = { 0U, 3U, 6U };
   for (uint8_t i = 0U; i < VALET_LEVELS; ++i)
   {
@@ -28,6 +28,36 @@ void __attribute__((optimize("Os"))) setDefaults(config15 &page15)
     page15.valetIgnRetard[i] = ignRetard[i];
     page15.valetFlags[i] = 0U; // Launch and flat shift blocked
   }
+}
+
+void __attribute__((optimize("Os"))) upgradeBoostToV7(config15 &page15)
+{
+  for (uint8_t i = 0U; i < VALET_LEVELS; ++i)
+  {
+    uint8_t absolute = page15.valetBoostLimit[i];
+    page15.valetBoostLimit[i] = (absolute == 0U) ? VALET_BOOST_NO_LIMIT // the old "no limit"
+                              : (absolute <= 100U) ? 0U                 // the old "no boost" (100) and below
+                              : (uint8_t)(absolute - 100U);             // absolute at sea level -> above the ambient
+  }
+}
+
+uint8_t boostCutPercentFor(uint16_t mapKpa, uint16_t limitAbs, bool &cutting)
+{
+  if (limitAbs == 0U)
+  {
+    cutting = false;
+    return 0U;
+  }
+  int16_t over = (int16_t)mapKpa - (int16_t)limitAbs;
+  if (over >= (int16_t)VALET_BOOST_CUT_START) { cutting = true; }
+  else if (over < -(int16_t)VALET_BOOST_CUT_HYST) { cutting = false; }
+  else { /* Hysteresis band: keep the last state */ }
+  if (!cutting) { return 0U; }
+  if (over >= (int16_t)VALET_BOOST_CUT_FULL) { return VALET_CUT_FULL; }
+  if (over <= (int16_t)VALET_BOOST_CUT_START) { return VALET_BOOST_CUT_MIN_PCT; } // and the hysteresis band
+  return (uint8_t)(VALET_BOOST_CUT_MIN_PCT
+                 + (((uint16_t)(over - (int16_t)VALET_BOOST_CUT_START) * (100U - VALET_BOOST_CUT_MIN_PCT))
+                    / (VALET_BOOST_CUT_FULL - VALET_BOOST_CUT_START)));
 }
 
 } // namespace details
@@ -97,7 +127,10 @@ uint8_t valetLevel(void) { return valetState.level; }
 bool valetPending(void) { return valetState.inForce != valetState.level; }
 
 uint8_t valetRevLimit(const config15 &page15) { return limitOf(page15.valetRevLimit, valetState.inForce); }
-uint8_t valetBoostLimit(const config15 &page15) { return limitOf(page15.valetBoostLimit, valetState.inForce); }
+uint8_t valetBoostLimit(const config15 &page15)
+{
+  return (valetState.inForce != 0U) ? page15.valetBoostLimit[valetState.inForce - 1U] : VALET_BOOST_NO_LIMIT;
+}
 uint8_t valetIgnRetard(const config15 &page15) { return limitOf(page15.valetIgnRetard, valetState.inForce); }
 bool valetLaunchAllowed(const config15 &page15) { return (valetState.inForce == 0U) || ((limitOf(page15.valetFlags, valetState.inForce) & 0x01U) != 0U); }
 bool valetFlatShiftAllowed(const config15 &page15) { return (valetState.inForce == 0U) || ((limitOf(page15.valetFlags, valetState.inForce) & 0x02U) != 0U); }
@@ -111,21 +144,46 @@ uint8_t valetSoftRevLimit(uint8_t softRevLim, uint8_t hardRevLim, const config15
   return (soft < softRevLim) ? soft : softRevLim;
 }
 
-uint16_t valetBoostTarget(uint16_t target, const config15 &page15)
+uint16_t valetBoostLimitAbs(const statuses &current, const config15 &page15)
 {
   uint8_t limit = valetBoostLimit(page15);
-  return ((limit != 0U) && (target > limit)) ? limit : target;
+  if (limit == VALET_BOOST_NO_LIMIT) { return 0U; }
+  uint16_t ambient = (current.baro >= 50U) ? current.baro : 100U; // (the ambient not read yet: sea level)
+  return ambient + limit;
 }
 
-bool valetBoostOverLimit(uint16_t mapKpa, const config15 &page15)
+// The solenoid works a little ahead of the limit: the wastegate takes time to open
+static inline uint16_t solenoidThreshold(uint16_t limitAbs)
 {
-  uint8_t limit = valetBoostLimit(page15);
-  if (limit == 0U) { valetState.boostOver = false; }
-  else if (mapKpa >= limit) { valetState.boostOver = true; }
-  else if (((uint16_t)mapKpa + VALET_BOOST_HYSTERESIS) < limit) { valetState.boostOver = false; }
+  return (limitAbs > VALET_BOOST_SOLENOID_LEAD) ? (uint16_t)(limitAbs - VALET_BOOST_SOLENOID_LEAD) : 0U;
+}
+
+uint16_t valetBoostTarget(uint16_t target, const statuses &current, const config15 &page15)
+{
+  uint16_t limitAbs = valetBoostLimitAbs(current, page15);
+  if (limitAbs == 0U) { return target; }
+  uint16_t cap = solenoidThreshold(limitAbs);
+  return (target > cap) ? cap : target;
+}
+
+bool valetBoostOverLimit(const statuses &current, const config15 &page15)
+{
+  uint16_t limitAbs = valetBoostLimitAbs(current, page15);
+  uint16_t threshold = solenoidThreshold(limitAbs);
+  uint16_t mapKpa = (uint16_t)current.MAP;
+  if (limitAbs == 0U) { valetState.boostOver = false; }
+  else if (mapKpa >= threshold) { valetState.boostOver = true; }
+  else if ((mapKpa + VALET_BOOST_HYSTERESIS) < threshold) { valetState.boostOver = false; }
   else { /* Hysteresis band: keep the last state */ }
   return valetState.boostOver;
 }
+
+TESTABLE_STATIC void valetBoostCutCore(uint16_t mapKpa, uint16_t limitAbs)
+{
+  valetState.boostCutPct = boostCutPercentFor(mapKpa, limitAbs, valetState.boostCutting);
+}
+
+uint8_t valetBoostCutPercent(void) { return valetState.boostCutPct; }
 
 // LCOV_EXCL_START
 bool handleValetCommand(uint16_t command)
@@ -136,5 +194,6 @@ bool handleValetCommand(uint16_t command)
 void valetUpdate(const statuses &current, const config15 &page15)
 {
   valetUpdateCore(current.RPM, page15);
+  valetBoostCutCore((uint16_t)current.MAP, valetBoostLimitAbs(current, page15));
 }
 // LCOV_EXCL_STOP

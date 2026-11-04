@@ -59,13 +59,10 @@ TESTABLE_INLINE_STATIC bool checkOilPressureLimit(const statuses &current, const
 
 TESTABLE_INLINE_STATIC bool checkBoostLimit(const statuses &current, const config6 &page6)
 {
-  // Fork: with the Valet on, the boost cut acts 20 kPa above its boost limit if that is lower (see valetController.h)
-  uint16_t limit = MAP.toUser(page6.boostLimit);
-  uint8_t valetLimit = valetBoostLimit(configPage15);
-  if ((valetLimit != 0U) && (((uint16_t)valetLimit + 20U) < limit)) { limit = (uint16_t)valetLimit + 20U; }
+  // (Fork: the Valet boost limit has a cut of its own, in calculateFuelIgnitionChannelCut(): see valetController.h)
   return (page6.engineProtectType != PROTECT_CUT_OFF)
       && (page6.boostCutEnabled) 
-      && (current.MAP > limit);
+      && (current.MAP > MAP.toUser(page6.boostLimit));
 }
 
 static inline bool canApplyAfrLimit(const config6 &page6, const config9 &page9)
@@ -292,10 +289,10 @@ constexpr statuses::scheduler_cut_t CUT_NONE = {
   .status = SchedulerCutStatus::None 
 };
 
-static inline statuses::scheduler_cut_t applyFullCut(const config6 &page6)
+static inline statuses::scheduler_cut_t applyFullCutType(uint8_t cutType)
 {
   //Full hard cut turns outputs off completely. 
-  switch(page6.engineProtectType)
+  switch(cutType)
   {
     case PROTECT_CUT_IGN:
       return CUT_FULL_IGN;
@@ -309,6 +306,8 @@ static inline statuses::scheduler_cut_t applyFullCut(const config6 &page6)
       break;
   }
 }
+
+static inline statuses::scheduler_cut_t applyFullCut(const config6 &page6) { return applyFullCutType(page6.engineProtectType); }
 
 /**
  * @brief Immediately below max RPM, there is a range within which we can apply a rolling cut.
@@ -364,9 +363,9 @@ TESTABLE_INLINE_STATIC uint8_t calcRollingCutPercentage(const statuses &current,
   return table2D_getValue(&rollingCutTable, SIGNED_RPM_MEDIUM.toRaw(rpmDelta) ); 
 }
 
-static inline statuses::scheduler_cut_t channelOff(statuses::scheduler_cut_t cutState, const config6 &page6, uint8_t channel)
+static inline statuses::scheduler_cut_t channelOffType(statuses::scheduler_cut_t cutState, uint8_t cutType, uint8_t channel)
 {
-  switch(page6.engineProtectType)
+  switch(cutType)
   {
     case PROTECT_CUT_IGN:
       BIT_CLEAR(cutState.ignitionChannels, channel); //Turn off this ignition channel
@@ -381,6 +380,11 @@ static inline statuses::scheduler_cut_t channelOff(statuses::scheduler_cut_t cut
       break;
   }
   return cutState;
+}
+
+static inline statuses::scheduler_cut_t channelOff(statuses::scheduler_cut_t cutState, const config6 &page6, uint8_t channel)
+{
+  return channelOffType(cutState, page6.engineProtectType, channel);
 }
 
 TESTABLE_INLINE_STATIC statuses::scheduler_cut_t channelOn(statuses::scheduler_cut_t cutState, bool supportPendingIgnitionCut, uint8_t channel)
@@ -410,14 +414,14 @@ TESTABLE_STATIC bool supportPendingIgnitionCut(const config2 &page2, const confi
       && (page6.engineProtectType == PROTECT_CUT_BOTH);
 }
 
-TESTABLE_STATIC statuses::scheduler_cut_t applyRollingCutPercentage(const statuses &current, const config6 &page6, uint8_t cutPercent, bool supportPendingIgnitionCut)
+static statuses::scheduler_cut_t applyRollingCutPercentageType(const statuses &current, uint8_t cutType, uint8_t cutPercent, bool supportPendingIgnitionCut)
 {
   statuses::scheduler_cut_t cutState = current.schedulerCutState;
   for(uint8_t channel=0; channel<(std::max)(current.maxIgnOutputs, current.injOutputs.getTotalInjectors()); ++channel)
   {  
     if( rollingCutRandFunc() < cutPercent )
     {
-      cutState = channelOff(cutState, page6, channel);
+      cutState = channelOffType(cutState, cutType, channel);
     }
     else
     {
@@ -426,6 +430,11 @@ TESTABLE_STATIC statuses::scheduler_cut_t applyRollingCutPercentage(const status
   }
   cutState.status = SchedulerCutStatus::Rolling;
   return cutState;
+}
+
+TESTABLE_STATIC statuses::scheduler_cut_t applyRollingCutPercentage(const statuses &current, const config6 &page6, uint8_t cutPercent, bool supportPendingIgnitionCut)
+{
+  return applyRollingCutPercentageType(current, page6.engineProtectType, cutPercent, supportPendingIgnitionCut);
 }
 
 //Check whether there are any ignition channels that are waiting for injection pulses to occur before being turned back on. This can only occur when at least 2 revolutions have taken place since the fuel was turned back on
@@ -441,7 +450,8 @@ TESTABLE_STATIC statuses::scheduler_cut_t applyPendingIgnitionCuts(statuses::sch
   return cutState;
 }
 
-TESTABLE_STATIC statuses::scheduler_cut_t applyRollingCut(const statuses &current, const config2 &page2, const config4 &page4, const config6 &page6, uint16_t maxAllowedRPM)
+// The rolling cut with a given share and cut type (the RPM limits and the Fork's Valet boost cut share it)
+static statuses::scheduler_cut_t applyRollingCutTyped(const statuses &current, const config2 &page2, const config4 &page4, uint8_t cutType, uint8_t cutPercent)
 {
   if(rollingCutLastRev == 0U) { rollingCutLastRev = current.startRevolutions; } //First time check
 
@@ -449,17 +459,18 @@ TESTABLE_STATIC statuses::scheduler_cut_t applyRollingCut(const statuses &curren
   if ( current.startRevolutions >= (rollingCutLastRev + revolutionsToCut)) //Check if the required number of revolutions have passed since the last cut
   { 
     rollingCutLastRev = current.startRevolutions;
-    return applyPendingIgnitionCuts(
-              applyRollingCutPercentage(current, 
-                                        page6, 
-                                        calcRollingCutPercentage(current, maxAllowedRPM), 
-                                        supportPendingIgnitionCut(page2, page4, page6)),
-              current);
+    bool pending = (page2.strokes == FOUR_STROKE) && isNonSequential(page2, page4) && (cutType == PROTECT_CUT_BOTH);
+    return applyPendingIgnitionCuts(applyRollingCutPercentageType(current, cutType, cutPercent, pending), current);
   } 
   else
   {
     return applyPendingIgnitionCuts(current.schedulerCutState, current);
   }
+}
+
+TESTABLE_STATIC statuses::scheduler_cut_t applyRollingCut(const statuses &current, const config2 &page2, const config4 &page4, const config6 &page6, uint16_t maxAllowedRPM)
+{
+  return applyRollingCutTyped(current, page2, page4, page6.engineProtectType, calcRollingCutPercentage(current, maxAllowedRPM));
 }
 
 statuses::scheduler_cut_t maskUnusedChannels(statuses::scheduler_cut_t cutState, const statuses &current)
@@ -477,34 +488,66 @@ BEGIN_LTO_ALWAYS_INLINE(statuses::scheduler_cut_t) calculateFuelIgnitionChannelC
   {
     cutState = CUT_FULL_BOTH;
   }
-  else if (page6.engineProtectType!=PROTECT_CUT_OFF)
+  else
   {
-    // Determine the absolute max RPM
-    uint16_t maxAllowedRPM = getMaxRpm(current, page4, page6, page9);
-
-    // Full cut is always applied if RPM exceeds max allowed
-    // regardless of page2.hardCutType
-    if (current.RPM >= maxAllowedRPM)
+    // The share of a rolling cut (0 none), or a full cut, and its type
+    uint8_t cutType = page6.engineProtectType;
+    uint8_t rollingPercent = 0U;
+    bool fullCut = false;
+    if (page6.engineProtectType!=PROTECT_CUT_OFF)
     {
-        cutState = applyFullCut(page6);
+      // Determine the absolute max RPM
+      uint16_t maxAllowedRPM = getMaxRpm(current, page4, page6, page9);
+
+      // Full cut is always applied if RPM exceeds max allowed
+      // regardless of page2.hardCutType
+      if (current.RPM >= maxAllowedRPM)
+      {
+        fullCut = true;
+      }
+      else if (useRollingCut(current, page2, maxAllowedRPM))
+      { 
+        rollingPercent = calcRollingCutPercentage(current, maxAllowedRPM);
+      }
+      else
+      {
+        // Nothing to do - default CUT_NONE will apply no cuts
+      }
     }
-    else if (useRollingCut(current, page2, maxAllowedRPM))
-    { 
-        cutState = applyRollingCut(current, page2, page4, page6, maxAllowedRPM);
+    else if ((valetRevLimit(configPage15) != 0U) && (current.RPM >= RPM_COARSE.toUser(valetRevLimit(configPage15))))
+    {
+      // Fork: with the engine protection Off, the Valet RPM limit still cuts — by ignition only, full cut (the driver's choice: never fuel)
+      cutType = PROTECT_CUT_IGN;
+      fullCut = true;
     }
     else
     {
       // Nothing to do - default CUT_NONE will apply no cuts
     }
-  }
-  else if ((valetRevLimit(configPage15) != 0U) && (current.RPM >= RPM_COARSE.toUser(valetRevLimit(configPage15))))
-  {
-    // Fork: with the engine protection Off, the Valet RPM limit still cuts — by ignition only, full cut (the driver's choice: never fuel)
-    cutState = CUT_FULL_IGN;
-  }
-  else
-  {
-    // Nothing to do - default CUT_NONE will apply no cuts
+
+    // Fork: the Valet boost limit cuts on its own, at any RPM, progressive (see valetController.h). The protection's
+    // cut type, ignition only with the protection Off. The stronger of it and the RPM limits wins.
+    uint8_t valetPercent = valetBoostCutPercent();
+    if (valetPercent != 0U)
+    {
+      if (cutType == PROTECT_CUT_OFF) { cutType = PROTECT_CUT_IGN; }
+      if (valetPercent >= VALET_CUT_FULL) { fullCut = true; }
+      else if (valetPercent > rollingPercent) { rollingPercent = valetPercent; }
+      else { /* The RPM limit already cuts more */ }
+    }
+
+    if (fullCut)
+    {
+      cutState = applyFullCutType(cutType);
+    }
+    else if (rollingPercent != 0U)
+    {
+      cutState = applyRollingCutTyped(current, page2, page4, cutType, rollingPercent);
+    }
+    else
+    {
+      // Nothing to do - default CUT_NONE will apply no cuts
+    }
   }
 
   return maskUnusedChannels(cutState, current);

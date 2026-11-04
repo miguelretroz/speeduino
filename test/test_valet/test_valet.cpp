@@ -14,6 +14,7 @@ using namespace valet::details;
 extern state_t valetState;
 extern bool valetCommandCore(uint16_t command, uint32_t nowMs);
 extern void valetUpdateCore(uint16_t rpm, const config15 &page15);
+extern void valetBoostCutCore(uint16_t mapKpa, uint16_t limitAbs);
 
 static void setup_valet(void)
 {
@@ -42,8 +43,9 @@ static void test_defaults(void)
     TEST_ASSERT_EQUAL_UINT8(50U, configPage15.valetRevLimit[0]);
     TEST_ASSERT_EQUAL_UINT8(40U, configPage15.valetRevLimit[1]);
     TEST_ASSERT_EQUAL_UINT8(30U, configPage15.valetRevLimit[2]);
-    TEST_ASSERT_EQUAL_UINT8(150U, configPage15.valetBoostLimit[0]);
-    TEST_ASSERT_EQUAL_UINT8(100U, configPage15.valetBoostLimit[2]);
+    TEST_ASSERT_EQUAL_UINT8(50U, configPage15.valetBoostLimit[0]); // kPa above the ambient
+    TEST_ASSERT_EQUAL_UINT8(20U, configPage15.valetBoostLimit[1]);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.valetBoostLimit[2]);  // no boost
     TEST_ASSERT_EQUAL_UINT8(0U, configPage15.valetIgnRetard[0]);
     TEST_ASSERT_EQUAL_UINT8(6U, configPage15.valetIgnRetard[2]);
     TEST_ASSERT_EQUAL_UINT8(0U, configPage15.valetFlags[1]);
@@ -61,8 +63,9 @@ static void test_upgrade_from_v5(void)
     configPage15.valetRevLimit[1] = 0xEEU;
     fakeForkStorage.version = FORK_CONFIG_V5;
     doForkUpdates(configPage15);
-    TEST_ASSERT_EQUAL(FORK_CONFIG_V6, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_LATEST, fakeForkStorage.version);
     TEST_ASSERT_EQUAL_UINT8(40U, configPage15.valetRevLimit[1]);
+    TEST_ASSERT_EQUAL_UINT8(20U, configPage15.valetBoostLimit[1]); // the V6 defaults, already above the ambient
     TEST_ASSERT_EQUAL_UINT8(33U, configPage15.protFuelPressRpm);
 }
 
@@ -142,6 +145,26 @@ static void test_eeprom(void)
     TEST_ASSERT_EQUAL_UINT8(0U, valetLevel()); // a marked byte with no such level is off
 }
 
+// Version 7: the boost limits were absolute kPa (0 = no limit); now kPa above the ambient (255 = no limit)
+static void test_upgrade_from_v6(void)
+{
+    resetFakeForkStorage();
+    doForkUpdates(configPage15);
+    fakeForkStorage.version = FORK_CONFIG_V6;
+    configPage15.valetBoostLimit[0] = 150U; // ~0.5 bar
+    configPage15.valetBoostLimit[1] = 0U;   // no limit
+    configPage15.valetBoostLimit[2] = 90U;  // below the old "no boost" (100)
+    configPage15.valetRevLimit[1] = 35U;    // a V6 field the upgrade must keep
+    doForkUpdates(configPage15);
+    TEST_ASSERT_EQUAL(FORK_CONFIG_V7, fakeForkStorage.version);
+    TEST_ASSERT_EQUAL_UINT8(50U, configPage15.valetBoostLimit[0]);
+    TEST_ASSERT_EQUAL_UINT8(VALET_BOOST_NO_LIMIT, configPage15.valetBoostLimit[1]);
+    TEST_ASSERT_EQUAL_UINT8(0U, configPage15.valetBoostLimit[2]);
+    TEST_ASSERT_EQUAL_UINT8(35U, configPage15.valetRevLimit[1]);
+    doForkUpdates(configPage15); // already on V7: nothing converts twice
+    TEST_ASSERT_EQUAL_UINT8(50U, configPage15.valetBoostLimit[0]);
+}
+
 static void test_pending(void)
 {
     setup_valet();
@@ -150,7 +173,7 @@ static void test_pending(void)
     TEST_ASSERT_EQUAL_UINT8(3U, valetLevel());
     TEST_ASSERT_TRUE(valetPending());
     TEST_ASSERT_EQUAL_UINT8(0U, valetRevLimit(configPage15)); // the old one (none) still in force
-    TEST_ASSERT_EQUAL_UINT8(0U, valetBoostLimit(configPage15));
+    TEST_ASSERT_EQUAL_UINT8(VALET_BOOST_NO_LIMIT, valetBoostLimit(configPage15));
     valetUpdateCore(2900U, configPage15);
     TEST_ASSERT_TRUE(valetPending()); // 2900 + 200 is above 3000
     valetUpdateCore(2800U, configPage15);
@@ -181,7 +204,7 @@ static void test_limits(void)
     TEST_ASSERT_EQUAL_UINT8(0U, valetIgnRetard(configPage15));
     level(2);
     TEST_ASSERT_EQUAL_UINT8(40U, valetRevLimit(configPage15));
-    TEST_ASSERT_EQUAL_UINT8(120U, valetBoostLimit(configPage15));
+    TEST_ASSERT_EQUAL_UINT8(20U, valetBoostLimit(configPage15));
     TEST_ASSERT_EQUAL_UINT8(3U, valetIgnRetard(configPage15));
     TEST_ASSERT_FALSE(valetLaunchAllowed(configPage15));
     TEST_ASSERT_FALSE(valetFlatShiftAllowed(configPage15));
@@ -206,18 +229,73 @@ static void test_soft_limit(void)
     TEST_ASSERT_EQUAL_UINT8(60U, valetSoftRevLimit(60U, 65U, configPage15)); // above the tune's: the tune's
 }
 
+// The boost limit is above the ambient pressure: with 90 kPa ambient, level 1 (+50) holds 140 kPa absolute, level 3
+// (0, no boost) 90. The solenoid works 3 kPa before it.
 static void test_boost(void)
 {
     setup_valet();
-    TEST_ASSERT_EQUAL_UINT16(200U, valetBoostTarget(200U, configPage15));
-    TEST_ASSERT_FALSE(valetBoostOverLimit(300U, configPage15));
-    level(1); // 150 kPa
-    TEST_ASSERT_EQUAL_UINT16(150U, valetBoostTarget(200U, configPage15));
-    TEST_ASSERT_EQUAL_UINT16(100U, valetBoostTarget(100U, configPage15));
-    TEST_ASSERT_FALSE(valetBoostOverLimit(149U, configPage15));
-    TEST_ASSERT_TRUE(valetBoostOverLimit(150U, configPage15));
-    TEST_ASSERT_TRUE(valetBoostOverLimit(147U, configPage15)); // hysteresis
-    TEST_ASSERT_FALSE(valetBoostOverLimit(144U, configPage15));
+    currentStatus.baro = 90U;
+    TEST_ASSERT_EQUAL_UINT16(0U, valetBoostLimitAbs(currentStatus, configPage15)); // off: no limit
+    TEST_ASSERT_EQUAL_UINT16(200U, valetBoostTarget(200U, currentStatus, configPage15));
+    currentStatus.MAP = 300U;
+    TEST_ASSERT_FALSE(valetBoostOverLimit(currentStatus, configPage15));
+    level(1);
+    TEST_ASSERT_EQUAL_UINT16(140U, valetBoostLimitAbs(currentStatus, configPage15));
+    TEST_ASSERT_EQUAL_UINT16(137U, valetBoostTarget(200U, currentStatus, configPage15));
+    TEST_ASSERT_EQUAL_UINT16(100U, valetBoostTarget(100U, currentStatus, configPage15));
+    currentStatus.MAP = 136U;
+    TEST_ASSERT_FALSE(valetBoostOverLimit(currentStatus, configPage15));
+    currentStatus.MAP = 137U;
+    TEST_ASSERT_TRUE(valetBoostOverLimit(currentStatus, configPage15));
+    currentStatus.MAP = 133U;
+    TEST_ASSERT_TRUE(valetBoostOverLimit(currentStatus, configPage15)); // hysteresis
+    currentStatus.MAP = 131U;
+    TEST_ASSERT_FALSE(valetBoostOverLimit(currentStatus, configPage15));
+    level(3); // no boost: the ambient itself
+    TEST_ASSERT_EQUAL_UINT16(90U, valetBoostLimitAbs(currentStatus, configPage15));
+    configPage15.valetBoostLimit[2] = VALET_BOOST_NO_LIMIT;
+    TEST_ASSERT_EQUAL_UINT16(0U, valetBoostLimitAbs(currentStatus, configPage15));
+    configPage15.valetBoostLimit[2] = 0U;
+    currentStatus.baro = 0U; // the ambient not read: sea level
+    TEST_ASSERT_EQUAL_UINT16(100U, valetBoostLimitAbs(currentStatus, configPage15));
+    currentStatus.baro = 100U;
+    currentStatus.MAP = 100U;
+}
+
+// The cut: 25% of the sparks 1 kPa above the limit, rising to a full cut 5 kPa above; once cutting, the minimum stays
+// down to 3 kPa below the limit (no on/off chatter)
+static void test_boost_cut(void)
+{
+    bool cutting = false;
+    const uint16_t lim = 100U;
+    TEST_ASSERT_EQUAL_UINT8(0U, boostCutPercentFor(100U, lim, cutting));
+    TEST_ASSERT_EQUAL_UINT8(25U, boostCutPercentFor(101U, lim, cutting));
+    TEST_ASSERT_EQUAL_UINT8(43U, boostCutPercentFor(102U, lim, cutting));
+    TEST_ASSERT_EQUAL_UINT8(62U, boostCutPercentFor(103U, lim, cutting));
+    TEST_ASSERT_EQUAL_UINT8(81U, boostCutPercentFor(104U, lim, cutting));
+    TEST_ASSERT_EQUAL_UINT8(VALET_CUT_FULL, boostCutPercentFor(105U, lim, cutting));
+    TEST_ASSERT_EQUAL_UINT8(VALET_CUT_FULL, boostCutPercentFor(130U, lim, cutting));
+    TEST_ASSERT_EQUAL_UINT8(62U, boostCutPercentFor(103U, lim, cutting)); // falling: the same curve
+    TEST_ASSERT_EQUAL_UINT8(25U, boostCutPercentFor(99U, lim, cutting));  // below the limit: still the minimum
+    TEST_ASSERT_EQUAL_UINT8(25U, boostCutPercentFor(97U, lim, cutting));  // 3 below: the edge of the band
+    TEST_ASSERT_EQUAL_UINT8(0U, boostCutPercentFor(96U, lim, cutting));   // cleared
+    TEST_ASSERT_EQUAL_UINT8(0U, boostCutPercentFor(100U, lim, cutting));  // and only back 1 kPa above
+    TEST_ASSERT_EQUAL_UINT8(25U, boostCutPercentFor(101U, lim, cutting));
+    TEST_ASSERT_EQUAL_UINT8(0U, boostCutPercentFor(150U, 0U, cutting));  // no limit: nothing (and the state clears)
+    TEST_ASSERT_FALSE(cutting);
+
+    // through the Valet: the level in force, the live byte (bit 5) and nothing with the Valet off
+    setup_valet();
+    level(3); // no boost
+    valetBoostCutCore(105U, valetBoostLimitAbs(currentStatus, configPage15)); // ambient 100
+    TEST_ASSERT_EQUAL_UINT8(VALET_CUT_FULL, valetBoostCutPercent());
+    TEST_ASSERT_EQUAL_HEX8(0x23U, getTSLogEntry(160U));
+    valetBoostCutCore(90U, valetBoostLimitAbs(currentStatus, configPage15));
+    TEST_ASSERT_EQUAL_UINT8(0U, valetBoostCutPercent());
+    TEST_ASSERT_EQUAL_HEX8(0x03U, getTSLogEntry(160U));
+    unlockTo(0);
+    valetBoostCutCore(200U, valetBoostLimitAbs(currentStatus, configPage15));
+    TEST_ASSERT_EQUAL_UINT8(0U, valetBoostCutPercent());
 }
 
 static void test_realtime_byte(void)
@@ -243,6 +321,7 @@ void testValet(void)
     SET_UNITY_FILENAME() {
         RUN_TEST_P(test_defaults);
         RUN_TEST_P(test_upgrade_from_v5);
+        RUN_TEST_P(test_upgrade_from_v6);
         RUN_TEST_P(test_command_group);
         RUN_TEST_P(test_raise_always_lower_needs_unlock);
         RUN_TEST_P(test_unlock_window);
@@ -251,6 +330,7 @@ void testValet(void)
         RUN_TEST_P(test_limits);
         RUN_TEST_P(test_soft_limit);
         RUN_TEST_P(test_boost);
+        RUN_TEST_P(test_boost_cut);
         RUN_TEST_P(test_realtime_byte);
     }
     valetState = state_t(); // (the other suites run with the Valet off)

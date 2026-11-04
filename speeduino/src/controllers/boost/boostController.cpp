@@ -209,8 +209,8 @@ TESTABLE_STATIC void boostControlCore(statuses &current, const config2 &page2, c
     if(page4.boostType == OPEN_LOOP_BOOST)
     {
       current.boostDuty = getBoostDuty(current, page2, page9);
-      // Fork: at the Valet boost limit, duty 0 leaves the wastegate on its spring (see valetController.h)
-      if (valetBoostOverLimit((uint16_t)current.MAP, page15)) { current.boostDuty = 0; }
+      // Fork: near the Valet boost limit, duty 0 leaves the wastegate on its spring (see valetController.h)
+      if (valetBoostOverLimit(current, page15)) { current.boostDuty = 0; }
     }
     else // CLOSED_LOOP_BOOST
     {
@@ -221,7 +221,7 @@ TESTABLE_STATIC void boostControlCore(statuses &current, const config2 &page2, c
       // LCOV_EXCL_BR_STOP
       { 
         current.flexBoostCorrection = getFlexCorrection(current, page2);
-        current.boostTarget = valetBoostTarget(getBoostTarget(current, page2, page9), page15); // Fork: capped by the Valet
+        current.boostTarget = valetBoostTarget(getBoostTarget(current, page2, page9), current, page15); // Fork: capped by the Valet
         current.boostDuty = convertTargetToDuty(current, page2, page6, page10);
       } 
 
@@ -232,7 +232,8 @@ TESTABLE_STATIC void boostControlCore(statuses &current, const config2 &page2, c
         boostPID.initialize(current.MAP); //This resets the ITerm value to prevent rubber banding
         // Boost control needs to have a high duty cycle if control is below threshold (baro or fixed value). 
         // This ensures the waste gate is closed as much as possible, this build boost as fast as possible.
-        current.boostDuty = page15.boostDCWhenDisabled*100;
+        // Fork: not with a Valet boost limit in force: that would spool the turbo right into it (see valetController.h)
+        current.boostDuty = (valetBoostLimitAbs(current, page15) != 0U) ? 0U : page15.boostDCWhenDisabled*100;
       } //MAP above boost + hyster
     } //Open / Cloosed loop
   }

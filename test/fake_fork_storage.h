@@ -32,5 +32,6 @@ constexpr uint8_t FORK_CONFIG_V3 = 0xC7U;
 constexpr uint8_t FORK_CONFIG_V4 = 0xC8U;
 constexpr uint8_t FORK_CONFIG_V5 = 0xC9U;
 constexpr uint8_t FORK_CONFIG_V6 = 0xCAU;
+constexpr uint8_t FORK_CONFIG_V7 = 0xCBU;
 /** @brief The version every board ends up on */
-constexpr uint8_t FORK_CONFIG_LATEST = FORK_CONFIG_V6;
+constexpr uint8_t FORK_CONFIG_LATEST = FORK_CONFIG_V7;

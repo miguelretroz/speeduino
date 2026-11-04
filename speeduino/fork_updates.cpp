@@ -18,6 +18,7 @@ static constexpr uint8_t FORK_CONFIG_V3 = 0xC7U; // Oil temperature (bytes 198-2
 static constexpr uint8_t FORK_CONFIG_V4 = 0xC8U; // PID auto tune and gain adaptation (bytes 186-196)
 static constexpr uint8_t FORK_CONFIG_V5 = 0xC9U; // Sensor fault detection and engine protection actions (bytes 163-185)
 static constexpr uint8_t FORK_CONFIG_V6 = 0xCAU; // Valet mode and the manual cold start pump hold (bytes 149-162)
+static constexpr uint8_t FORK_CONFIG_V7 = 0xCBU; // The Valet boost limits as kPa above the ambient pressure (bytes 152-154)
 
 static void __attribute__((optimize("Os"))) upgradeToV2(config15 &page15)
 {
@@ -56,7 +57,7 @@ static void __attribute__((optimize("Os"))) upgradeToV6(config15 &page15)
 void __attribute__((optimize("Os"))) doForkUpdates(config15 &page15)
 {
   uint8_t version = loadForkConfigVersion();
-  if (version == FORK_CONFIG_V6) { return; }
+  if (version == FORK_CONFIG_V7) { return; }
 
   if (version == FORK_CONFIG_V1)
   {
@@ -80,7 +81,11 @@ void __attribute__((optimize("Os"))) doForkUpdates(config15 &page15)
   }
   if (version == FORK_CONFIG_V5)
   {
-    upgradeToV6(page15);
+    upgradeToV6(page15); // (the V6 defaults already have the V7 meaning: no conversion)
+  }
+  else if (version == FORK_CONFIG_V6)
+  {
+    valet::details::upgradeBoostToV7(page15);
   }
   else
   {
@@ -94,5 +99,5 @@ void __attribute__((optimize("Os"))) doForkUpdates(config15 &page15)
   }
 
   savePage(boostvvtPage2);
-  saveForkConfigVersion(FORK_CONFIG_V6);
+  saveForkConfigVersion(FORK_CONFIG_V7);
 }

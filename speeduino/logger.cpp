@@ -118,12 +118,14 @@ static byte buildStatus5(const statuses &current)
 // - Bits 0-1: Valet level (0 = off), bit 2: the level is pending (waits for the RPM to drop)
 // - Bit 3: the cold start output is on because of the manual hold
 // - Bit 4: the clutch input pin alone (without the remote clutch)
+// - Bit 5: the Valet boost limit is cutting
 static byte getForkStatus2(void)
 {
   return (byte)((valetLevel() & 0x03U)
               | (valetPending() ? 0x04U : 0U)
               | (coldStartManualActive() ? 0x08U : 0U)
-              | (isClutchPinPressed() ? 0x10U : 0U));
+              | (isClutchPinPressed() ? 0x10U : 0U)
+              | ((valetBoostCutPercent() != 0U) ? 0x20U : 0U));
 }
 
 byte buildEngineStatus(const statuses &current)

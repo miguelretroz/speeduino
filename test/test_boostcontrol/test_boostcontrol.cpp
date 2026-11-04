@@ -302,8 +302,57 @@ static void test_cl_boost_control_fixed(void)
   TEST_ASSERT_NOT_EQUAL_UINT16(0, context.current.boostDuty);
 }
 
+// Fork: a Valet boost limit in force (see valetController.h). Closed loop: no high "duty when disabled" below the
+// control threshold (it would spool the turbo into the limit), and the target capped 3 kPa below the limit.
+#include "src/controllers/valet/valetController.h"
+#include "src/controllers/valet/valetController_details.h"
+extern valet::details::state_t valetState;
+
+static void test_cl_boost_valet(void)
+{
+  auto context = setup_boost_tune(false, VSS_MODE_EXTERNAL_MI, CLOSED_LOOP_BOOST, BOOST_BY_GEAR_OFF);
+  context.page15.boostControlEnable = EN_BOOST_CONTROL_BARO;
+  context.page15.boostDCWhenDisabled = 77;
+  context.setup_boost_enabled();
+  context.current.baro = context.current.MAP + 10; // below the control threshold
+  valetState.level = valetState.inForce = 3U;
+  context.page15.valetBoostLimit[2] = 0U; // no boost
+  context.boostControl();
+  TEST_ASSERT_EQUAL_UINT16(0U, context.current.boostDuty);
+  TEST_ASSERT_TRUE(context.current.boostTarget <= (uint16_t)(context.current.baro - VALET_BOOST_SOLENOID_LEAD));
+  context.page15.valetBoostLimit[2] = VALET_BOOST_NO_LIMIT; // no limit: the tune's own behaviour
+  context.boostControl();
+  TEST_ASSERT_EQUAL_UINT16(context.page15.boostDCWhenDisabled*100, context.current.boostDuty);
+  valetState = valet::details::state_t();
+  context.boostControl();
+  TEST_ASSERT_EQUAL_UINT16(context.page15.boostDCWhenDisabled*100, context.current.boostDuty);
+}
+
+// Fork: open loop, the duty goes to 0 from 3 kPa below the Valet limit (the wastegate on its spring)
+static void test_ol_boost_valet(void)
+{
+  auto context = setup_boost_tune(false, VSS_MODE_EXTERNAL_MI, OPEN_LOOP_BOOST, BOOST_BY_GEAR_OFF);
+  fill_table_values(boostTable, 50);
+  context.initialise();
+  context.setup_boost_enabled();
+  context.current.baro = 90U;
+  valetState.level = valetState.inForce = 2U;
+  context.page15.valetBoostLimit[1] = 20U; // 110 kPa absolute: duty 0 from 107
+  context.current.MAP = 106U;
+  context.boostControl();
+  TEST_ASSERT_NOT_EQUAL_UINT16(0U, context.current.boostDuty);
+  context.current.MAP = 107U;
+  context.boostControl();
+  TEST_ASSERT_EQUAL_UINT16(0U, context.current.boostDuty);
+  valetState = valet::details::state_t();
+  context.boostControl();
+  TEST_ASSERT_NOT_EQUAL_UINT16(0U, context.current.boostDuty);
+}
+
 static void run_cl_tests(void)
 {
+  RUN_TEST_P(test_cl_boost_valet);
+  RUN_TEST_P(test_ol_boost_valet);
   RUN_TEST_P(test_boost_cl_target_clamp);
   RUN_TEST_P(test_cl_flexcorrection);
   RUN_TEST_P(test_cl_flexcorrection_negative);
